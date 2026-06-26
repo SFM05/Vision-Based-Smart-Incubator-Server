@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>菌落图像查询</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1100px; margin: 0 auto; padding: 24px;
+            background: #f5f5f5; color: #333;
+        }
+        h1 { text-align: center; margin-bottom: 24px; color: #1a1a1a; }
+        .form-row {
+            display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .form-row .field {
+            flex: 1; min-width: 180px;
+        }
+        .form-row .field label {
+            display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;
+        }
+        .form-row .field input {
+            width: 100%; padding: 8px 12px;
+            border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+        }
+        .quick-buttons {
+            display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .quick-buttons button {
+            padding: 6px 16px; border: 1px solid #1890ff;
+            background: #fff; color: #1890ff; border-radius: 6px;
+            cursor: pointer; font-size: 13px; transition: all 0.2s;
+        }
+        .quick-buttons button:hover { background: #1890ff; color: #fff; }
+        .custom-time {
+            display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .custom-time label {
+            font-weight: 600; font-size: 13px;
+        }
+        .custom-time input {
+            padding: 6px 10px; border: 1px solid #ccc;
+            border-radius: 6px; font-size: 13px; margin-left: 4px;
+        }
+        #query-btn {
+            display: block; width: 100%; padding: 10px;
+            background: #1890ff; color: #fff; border: none;
+            border-radius: 6px; font-size: 15px; cursor: pointer;
+            margin-bottom: 20px; transition: background 0.2s;
+        }
+        #query-btn:hover { background: #1677cc; }
+        #query-btn:disabled { background: #999; cursor: not-allowed; }
+        #error-message {
+            color: #d32f2f; background: #fdecea;
+            border: 1px solid #f5c6cb; border-radius: 6px;
+            padding: 10px 14px; margin-bottom: 16px; display: none;
+        }
+        #info-message {
+            color: #155724; background: #d4edda;
+            border: 1px solid #c3e6cb; border-radius: 6px;
+            padding: 10px 14px; margin-bottom: 16px; display: none;
+        }
+
+        /* Thumbnail grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .card {
+            background: #fff; border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            overflow: hidden; cursor: pointer;
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px); }
+        .card-thumb {
+            width: 100%; height: 160px; object-fit: cover;
+            display: block; background: #eee;
+        }
+        .card-body {
+            padding: 10px 12px;
+        }
+        .card-body .time {
+            font-size: 12px; color: #888; margin-bottom: 4px;
+        }
+        .card-body .count {
+            font-size: 13px; font-weight: 600; color: #1890ff;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none; position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75);
+            justify-content: center; align-items: center;
+            padding: 24px;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            background: #fff; border-radius: 10px;
+            max-width: 90vw; max-height: 90vh;
+            overflow-y: auto; position: relative;
+            padding: 20px;
+        }
+        .modal-close {
+            position: absolute; right: 16px; top: 12px;
+            font-size: 28px; cursor: pointer; color: #888;
+            line-height: 1; background: none; border: none;
+        }
+        .modal-close:hover { color: #333; }
+        .modal-header {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 16px;
+        }
+        .modal-header h2 { font-size: 16px; color: #333; }
+        .modal-header .modal-time { font-size: 13px; color: #888; }
+        .img-container {
+            position: relative; display: inline-block; max-width: 100%;
+        }
+        .img-container img {
+            display: block; max-width: 100%; max-height: 65vh;
+            border-radius: 4px;
+        }
+        .box-overlay {
+            position: absolute; border: 2px solid rgba(255, 50, 50, 0.85);
+            background: rgba(255, 50, 50, 0.08);
+            pointer-events: none; border-radius: 2px;
+        }
+        .box-label {
+            position: absolute; top: -20px; left: 0;
+            background: rgba(255, 50, 50, 0.85);
+            color: #fff; font-size: 11px; padding: 1px 5px;
+            white-space: nowrap; border-radius: 2px;
+        }
+        .modal-footer {
+            margin-top: 16px; display: flex;
+            justify-content: space-between; align-items: flex-start;
+            gap: 16px; flex-wrap: wrap;
+        }
+        .box-list {
+            flex: 1; min-width: 200px;
+            max-height: 160px; overflow-y: auto;
+            font-size: 13px;
+        }
+        .box-list table {
+            width: 100%; border-collapse: collapse; font-size: 12px;
+        }
+        .box-list th, .box-list td {
+            padding: 4px 8px; text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .box-list th { background: #fafafa; font-weight: 600; position: sticky; top: 0; }
+        #download-btn {
+            padding: 8px 20px; background: #52c41a; color: #fff;
+            border: none; border-radius: 6px; font-size: 14px;
+            cursor: pointer; transition: background 0.2s; white-space: nowrap;
+        }
+        #download-btn:hover { background: #45a816; }
+
+        .loading-spinner {
+            text-align: center; padding: 40px; color: #888;
+        }
+        .loading-spinner::after {
+            content: ''; display: inline-block; width: 32px; height: 32px;
+            border: 3px solid #ddd; border-top-color: #1890ff;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            margin-bottom: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <h1>菌落图像查询</h1>
+
+    <div class="form-row">
+        <div class="field">
+            <label for="uuid">设备 UUID</label>
+            <input type="text" id="uuid" placeholder="请输入设备 UUID">
+        </div>
+        <div class="field">
+            <label for="plateid">盘位号</label>
+            <input type="number" id="plateid" placeholder="1" min="1">
+        </div>
+    </div>
+
+    <div class="quick-buttons">
+        <button onclick="queryQuick(3600)">最近 1 小时</button>
+        <button onclick="queryQuick(21600)">最近 6 小时</button>
+        <button onclick="queryQuick(86400)">最近 24 小时</button>
+        <button onclick="queryQuick(604800)">最近 7 天</button>
+    </div>
+
+    <div class="custom-time">
+        <label>起始时间 <input type="datetime-local" id="start-time"></label>
+        <label>截止时间 <input type="datetime-local" id="end-time"></label>
+    </div>
+
+    <button id="query-btn" onclick="queryCustom()">查询</button>
+
+    <div id="error-message"></div>
+    <div id="info-message"></div>
+
+    <div id="grid-container">
+        <div class="loading-spinner" style="display:none;" id="loading-spinner">加载中...</div>
+        <div class="grid" id="card-grid"></div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div class="modal-header">
+                <h2 id="modal-title">菌落图像</h2>
+                <span class="modal-time" id="modal-time"></span>
+            </div>
+            <div class="img-container" id="img-container">
+                <img id="modal-img" src="" alt="菌落图像">
+            </div>
+            <div class="modal-footer">
+                <div class="box-list" id="box-list">
+                    <table>
+                        <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>置信度</th></tr></thead>
+                        <tbody id="box-tbody"></tbody>
+                    </table>
+                </div>
+                <a id="download-btn" href="" download>下载原图</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var BJ_OFFSET = 8 * 3600000;
+        var currentData = [];
+
+        function pad2(n) { return String(n).padStart(2, '0'); }
+
+        function utcMsToBeijing(utcMs) {
+            return new Date(utcMs + BJ_OFFSET);
+        }
+
+        function formatBeijingFull(utcMs) {
+            var d = utcMsToBeijing(utcMs);
+            return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()) + ' ' +
+                   pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
+        }
+
+        function formatDatetimeLocal(date) {
+            return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + 'T' +
+                   pad2(date.getHours()) + ':' + pad2(date.getMinutes());
+        }
+
+        function queryQuick(seconds) {
+            var now = Math.floor(Date.now() / 1000);
+            var start = (now - seconds) * 1000000;
+            var end = now * 1000000;
+            document.getElementById('start-time').value = formatDatetimeLocal(new Date((now - seconds) * 1000));
+            document.getElementById('end-time').value = formatDatetimeLocal(new Date(now * 1000));
+            doQuery(start, end);
+        }
+
+        function queryCustom() {
+            var startStr = document.getElementById('start-time').value;
+            var endStr = document.getElementById('end-time').value;
+            if (!startStr || !endStr) {
+                showError('请选择起始和截止时间');
+                return;
+            }
+            var start = new Date(startStr).getTime() * 1000;
+            var end = new Date(endStr).getTime() * 1000;
+            doQuery(start, end);
+        }
+
+        async function doQuery(startMicro, endMicro) {
+            var uuid = document.getElementById('uuid').value.trim();
+            var plateid = document.getElementById('plateid').value.trim();
+            if (!uuid) { showError('请输入设备 UUID'); return; }
+            if (!plateid) { showError('请输入盘位号'); return; }
+            hideError();
+            hideInfo();
+
+            document.getElementById('card-grid').innerHTML = '';
+            document.getElementById('loading-spinner').style.display = 'block';
+            document.getElementById('query-btn').disabled = true;
+
+            try {
+                var url = '/api/colony?uuid=' + encodeURIComponent(uuid) +
+                          '&plateid=' + encodeURIComponent(plateid) +
+                          '&start=' + startMicro + '&end=' + endMicro;
+                var resp = await fetch(url);
+                var data = await resp.json();
+
+                if (!data.success) {
+                    showError(data.message || '查询失败');
+                    return;
+                }
+
+                if (!data.colony || data.colony.length === 0) {
+                    showInfo('查询结果为空，请检查设备 UUID、盘位号和时间范围');
+                    return;
+                }
+
+                currentData = data.colony;
+                renderGrid(data.colony);
+            } catch (err) {
+                showError('请求失败: ' + err.message);
+            } finally {
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('query-btn').disabled = false;
+            }
+        }
+
+        async function renderGrid(colonyData) {
+            var grid = document.getElementById('card-grid');
+            grid.innerHTML = '';
+
+            var cards = [];
+            for (var i = 0; i < colonyData.length; i++) {
+                var item = colonyData[i];
+                var x = new Date(item.timestamp).getTime();
+                var timeStr = formatBeijingFull(x);
+
+                var card = document.createElement('div');
+                card.className = 'card';
+                card.dataset.index = i;
+
+                var img = document.createElement('img');
+                img.className = 'card-thumb';
+                img.alt = timeStr;
+                card.appendChild(img);
+
+                var body = document.createElement('div');
+                body.className = 'card-body';
+                body.innerHTML = '<div class="time">' + timeStr + '</div>' +
+                                 '<div class="count">菌落数: ' + (item.number || 0) + '</div>';
+                card.appendChild(body);
+
+                card.addEventListener('click', function(idx) {
+                    return function() { openModal(idx); };
+                }(i));
+
+                grid.appendChild(card);
+                cards.push({card: card, img: img, item: item});
+            }
+
+            for (var i = 0; i < cards.length; i++) {
+                var c = cards[i];
+                if (c.item.image && c.item.image.success && c.item.image.url) {
+                    c.img.src = c.item.image.url;
+                } else {
+                    c.img.alt = '图片不可用';
+                    c.img.style.objectFit = 'contain';
+                    c.img.style.padding = '20px';
+                }
+            }
+        }
+
+        async function openModal(index) {
+            var item = currentData[index];
+            var x = new Date(item.timestamp).getTime();
+            var timeStr = formatBeijingFull(x);
+
+            document.getElementById('modal-time').textContent = timeStr;
+            document.getElementById('modal-title').textContent = '菌落图像 (盘位 ' + document.getElementById('plateid').value + ')';
+
+            var container = document.getElementById('img-container');
+            var oldOverlays = container.querySelectorAll('.box-overlay');
+            for (var k = 0; k < oldOverlays.length; k++) {
+                oldOverlays[k].remove();
+            }
+
+            var img = document.getElementById('modal-img');
+            var tbody = document.getElementById('box-tbody');
+            tbody.innerHTML = '';
+
+            var loadHandler = function() {
+                var displayW = img.clientWidth;
+                var displayH = img.clientHeight;
+                var scaleX = displayW / 640;
+                var scaleY = displayH / 640;
+
+                if (item.record && item.record.success && item.record.url) {
+                    fetch(item.record.url)
+                        .then(function(r) { return r.text(); })
+                        .then(function(text) {
+                            tbody.innerHTML = '';
+                            var lines = text.trim().split('\n');
+                            for (var i = 0; i < lines.length; i++) {
+                                var parts = lines[i].trim().split(/\s+/);
+                                if (parts.length < 5) continue;
+                                var x1 = parseFloat(parts[0]);
+                                var y1 = parseFloat(parts[1]);
+                                var x2 = parseFloat(parts[2]);
+                                var y2 = parseFloat(parts[3]);
+                                var conf = parseFloat(parts[4]);
+
+                                var left = x1 * scaleX;
+                                var top = y1 * scaleY;
+                                var width = (x2 - x1) * scaleX;
+                                var height = (y2 - y1) * scaleY;
+
+                                var overlay = document.createElement('div');
+                                overlay.className = 'box-overlay';
+                                overlay.style.left = left + 'px';
+                                overlay.style.top = top + 'px';
+                                overlay.style.width = width + 'px';
+                                overlay.style.height = height + 'px';
+
+                                var label = document.createElement('span');
+                                label.className = 'box-label';
+                                label.textContent = (conf * 100).toFixed(1) + '%';
+                                overlay.appendChild(label);
+
+                                container.appendChild(overlay);
+
+                                var row = document.createElement('tr');
+                                row.innerHTML = '<td>' + x1.toFixed(1) + '</td><td>' + y1.toFixed(1) + '</td><td>' + x2.toFixed(1) + '</td><td>' + y2.toFixed(1) + '</td><td>' + (conf * 100).toFixed(1) + '%</td>';
+                                tbody.appendChild(row);
+                            }
+                        })
+                        .catch(function(err) {
+                            console.error('Failed to fetch record:', err);
+                            tbody.innerHTML = '<tr><td colspan="5">无法加载识别数据</td></tr>';
+                        });
+                }
+            };
+
+            img.onload = loadHandler;
+            if (img.complete) {
+                loadHandler();
+            }
+
+            if (item.image && item.image.success && item.image.url) {
+                img.src = item.image.url;
+                document.getElementById('download-btn').href = item.image.url;
+            } else {
+                img.src = '';
+                document.getElementById('download-btn').href = '#';
+                showError('图片不可用');
+                return;
+            }
+
+            document.getElementById('modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        document.getElementById('modal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        function showError(msg) {
+            var el = document.getElementById('error-message');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error-message').style.display = 'none';
+        }
+
+        function showInfo(msg) {
+            var el = document.getElementById('info-message');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function hideInfo() {
+            document.getElementById('info-message').style.display = 'none';
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            var now = new Date();
+            document.getElementById('end-time').value = formatDatetimeLocal(now);
+            document.getElementById('start-time').value = formatDatetimeLocal(new Date(now.getTime() - 3600000));
+        });
+    </script>
+</body>
+</html>

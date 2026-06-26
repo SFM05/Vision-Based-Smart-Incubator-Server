@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"mqtt_listener/utils"
+	"strconv"
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
@@ -21,6 +22,7 @@ type FileMetaData struct {
 }
 type ColonyMetaData struct {
 	Timestamp string       `json:"timestamp"`
+	Number    int64        `json:"number"`
 	Image     FileMetaData `json:"image"`
 	Record    FileMetaData `json:"record"`
 }
@@ -47,18 +49,18 @@ func getFileMetaData(path string) FileMetaData {
 	} else {
 		if existed {
 			result, err := client.Presign(context.TODO(), &oss.GetObjectRequest{
-				Bucket: oss.Ptr("embedded-comptition"), // 替换为你的Bucket名称
-				Key:    oss.Ptr(path),                  // 替换为你的文件完整路径
+				Bucket: oss.Ptr("embedded-comptition"),
+				Key:    oss.Ptr(path),
 			},
-				oss.PresignExpires(10*time.Minute), // 设置有效期为10分钟
+				oss.PresignExpires(10*time.Minute),
 			)
 			if err != nil {
 				data.Success = false
 				data.Mesaage = err.Error()
+			} else {
+				data.Success = true
+				data.URL = result.URL
 			}
-
-			data.Success = true
-			data.URL = result.URL
 		} else {
 			data.Success = false
 			data.Mesaage = "Not existed."
@@ -68,13 +70,13 @@ func getFileMetaData(path string) FileMetaData {
 	return data
 }
 
-func GetColony(uuid string, plateid string, start time.Time, end time.Time) string {
+func GetColony(uuid string, plateid int, start time.Time, end time.Time) string {
 	client := utils.InitClient()
 	// 构造待查询时间线的 timeseriesKey。
 	timeseriesKey := tablestore.NewTimeseriesKey()
 	timeseriesKey.SetMeasurementName("device_colony")
 	timeseriesKey.SetDataSource(uuid)
-	timeseriesKey.AddTag("plate_id", plateid)
+	timeseriesKey.AddTag("plate_id", strconv.Itoa(plateid))
 
 	// 构造查询请求。
 	getTimeseriesDataRequest := tablestore.NewGetTimeseriesDataRequest("colony")
@@ -110,6 +112,7 @@ func GetColony(uuid string, plateid string, start time.Time, end time.Time) stri
 
 		data := ColonyMetaData{
 			Timestamp: timestamp.Format("2006-01-02T15:04:05Z"),
+			Number:    rows["number"].Value.(int64),
 			Image:     image,
 			Record:    record,
 		}
