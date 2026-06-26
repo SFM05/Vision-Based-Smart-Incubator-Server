@@ -1,9 +1,10 @@
-package utils
+package web
 
 import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"mqtt_listener/utils"
 	"time"
 
 	"github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
@@ -22,7 +23,7 @@ type EnvResponse struct {
 
 // GetEnv 获取网页需要的温湿度数据
 func GetEnv(uuid string, start time.Time, end time.Time) string {
-	client := InitClient()
+	client := utils.InitClient()
 	// 构造待查询时间线的 timeseriesKey。
 	timeseriesKey := tablestore.NewTimeseriesKey()
 	timeseriesKey.SetMeasurementName("device_env")

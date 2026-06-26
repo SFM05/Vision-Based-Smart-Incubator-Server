@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	utils "mqtt_listener/utils"
+	"mqtt_listener/utils"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 )

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"mqtt_listener/utils"
+	"mqtt_listener/web"
 )
 
 func main() {
@@ -51,5 +51,5 @@ func handleEnvQuery(w http.ResponseWriter, r *http.Request) {
 	end := time.UnixMicro(endMicro)
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte(utils.GetEnv(uuid, start, end)))
+	w.Write([]byte(web.GetEnv(uuid, start, end)))
 }
