@@ -80,7 +80,7 @@ go build -o bin/web ./cmd/web/
 ### 阿里云 OSS
 
 | 变量 | 说明 |
-|---|---|---|
+|---|---|
 | `OSS_ACCESS_KEY_ID` | AccessKey ID |
 | `OSS_ACCESS_KEY_SECRET` | AccessKey Secret |
 | `REGION` | OSS 地域 |
@@ -89,7 +89,7 @@ go build -o bin/web ./cmd/web/
 ### 阿里云 Tablestore
 
 | 变量 | 说明 |
-|---|---|---|
+|---|---|
 | `TABLESTORE_ACCESS_KEY_ID` | AccessKey ID |
 | `TABLESTORE_ACCESS_KEY_SECRET` | AccessKey Secret |
 | `TABLE_INSTANCE_NAME` | 实例名称 |
