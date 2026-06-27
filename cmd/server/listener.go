@@ -33,10 +33,6 @@ var messageHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Messa
 		slog.Info(fmt.Sprintf("Receive environment data from %s", uuid))
 		go utils.OnDataReceived(uuid, payload)
 
-	case "uploadsuccess":
-		slog.Info(fmt.Sprintf("Receive upload sucess feedback form %s", uuid))
-		go utils.OnUploadSucess(uuid, payload)
-
 	default:
 		slog.Warn(fmt.Sprintf("Receive unkown message from %s: %s", uuid, payload))
 	}

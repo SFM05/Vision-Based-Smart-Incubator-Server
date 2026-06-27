@@ -117,9 +117,6 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 	if err != nil {
 		slog.Error(fmt.Sprintf("Encounter error when decoding json: %v", err))
 		slog.Error(fmt.Sprintf("    Original message: %s", payload))
-		// TODO
-		// uploadMessage(client,uuid,false,json_result.ImgPath,"")
-		// uploadMessage(client,uuid,false,json_result.TxtPath,"")
 		return
 	}
 
@@ -141,7 +138,6 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 	img_url, err := signUploadURL(img_path, 10*time.Minute)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))
-		// TODO
 		return
 	}
 	uploadMessage(client, uuid, timestamp, true, json_result.ImgPath, img_url)
@@ -153,7 +149,6 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 	txt_url, err := signUploadURL(txt_path, 10*time.Minute)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))
-		// TODO
 		return
 	}
 	uploadMessage(client, uuid, timestamp, true, json_result.TxtPath, txt_url)

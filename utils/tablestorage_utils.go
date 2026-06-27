@@ -40,7 +40,6 @@ func OnDataReceived(uuid string, payload string) {
 		slog.Error(fmt.Sprintf("Encounter error when decoding json: %v", err))
 		slog.Error(fmt.Sprintf("    Original message: %s", payload))
 		return
-		// TODO
 	}
 
 	loc, _ := time.LoadLocation("Asia/Shanghai")
