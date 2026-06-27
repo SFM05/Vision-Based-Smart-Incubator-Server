@@ -27,11 +27,11 @@ var messageHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Messa
 	switch request {
 	case "upload":
 		slog.Info(fmt.Sprintf("Receive upload request from %s", uuid))
-		utils.Upload(client, uuid, payload)
+		utils.OnUploadRequest(client, uuid, payload)
 
 	case "data":
 		slog.Info(fmt.Sprintf("Receive environment data from %s", uuid))
-		go utils.RecordEnvData(uuid, payload)
+		go utils.OnDataReceived(uuid, payload)
 
 	case "uploadsuccess":
 		slog.Info(fmt.Sprintf("Receive upload sucess feedback form %s", uuid))

@@ -42,7 +42,7 @@ type ChatRequest struct {
 
 // 进行AI推理
 func BailianInference(img_path string, model_name string) (string, string) {
-	img_url, err := signDownloadURL("cn-hangzhou", "embedded-comptition", img_path, 10*time.Minute)
+	img_url, err := signDownloadURL(img_path, 10*time.Minute)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Fail to sign URL: %v", err))
 		return "", ""
@@ -158,9 +158,6 @@ func OnUploadSucess(uuid string, payload string) {
 	if err != nil {
 		slog.Error(fmt.Sprintf("Encounter error when decoding json: %v", err))
 		slog.Error(fmt.Sprintf("    Original message: %s", payload))
-		// TODO
-		// uploadMessage(client,uuid,false,json_result.ImgPath,"")
-		// uploadMessage(client,uuid,false,json_result.TxtPath,"")
 		return
 	}
 
@@ -182,14 +179,17 @@ func OnUploadSucess(uuid string, payload string) {
 	_, content := BailianInference(img_path, model_name)
 
 	client := InitClient()
+	table_name := os.Getenv("COLONY_TABLE_NAME")
+	measurement_name := os.Getenv("COLONY_MEATURE_NAME")
+
 	// 构造待查询时间线的 timeseriesKey。
 	timeseriesKey := tablestore.NewTimeseriesKey()
-	timeseriesKey.SetMeasurementName("device_colony")
+	timeseriesKey.SetMeasurementName(measurement_name)
 	timeseriesKey.SetDataSource(uuid)
 	timeseriesKey.AddTag("plate_id", strconv.Itoa(json_result.PlateID))
 
 	// 构造查询请求。
-	getTimeseriesDataRequest := tablestore.NewGetTimeseriesDataRequest("colony")
+	getTimeseriesDataRequest := tablestore.NewGetTimeseriesDataRequest(table_name)
 	getTimeseriesDataRequest.SetTimeseriesKey(timeseriesKey)
 	getTimeseriesDataRequest.SetTimeRange(timestamp.UnixMicro(), timestamp.UnixMicro()+1) // 指定查询时间范围。
 	getTimeseriesDataRequest.SetLimit(-1)
@@ -207,7 +207,7 @@ func OnUploadSucess(uuid string, payload string) {
 			// 构造时序数据行 timeseriesRow。
 			// timeseriesKey 标识时间线：度量名称、数据源主机和标签。
 			timeseriesKey := tablestore.NewTimeseriesKey()
-			timeseriesKey.SetMeasurementName("device_colony")
+			timeseriesKey.SetMeasurementName(measurement_name)
 			timeseriesKey.SetDataSource(uuid)
 			timeseriesKey.AddTag("plate_id", strconv.Itoa(json_result.PlateID))
 
@@ -223,7 +223,7 @@ func OnUploadSucess(uuid string, payload string) {
 				tablestore.NewColumnValue(tablestore.ColumnType_STRING, content))
 
 			// 构造写入时序数据的请求。
-			putTimeseriesDataRequest := tablestore.NewPutTimeseriesDataRequest("colony")
+			putTimeseriesDataRequest := tablestore.NewPutTimeseriesDataRequest(table_name)
 			putTimeseriesDataRequest.AddTimeseriesRows(timeseriesRow)
 
 			_, err := client.PutTimeseriesData(putTimeseriesDataRequest)
@@ -234,6 +234,4 @@ func OnUploadSucess(uuid string, payload string) {
 			slog.Info("Success to write into the table")
 		}
 	}
-
-	// RecordColonyData(uuid,json_result.PlateID,timestamp,img_path,txt_path,content)
 }

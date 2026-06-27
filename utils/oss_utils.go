@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strconv"
 	"time"
 
@@ -24,24 +25,9 @@ var (
 )
 
 // SignURL 生成预签名上传URL
-func signUploadURL(region string,
-	bucket_name string,
-	object_name string,
-	expire_time time.Duration) (string, error) {
-	// 检查region是否为空
-	if len(region) == 0 {
-		return "", ErrRegionRequired
-	}
-
-	// 检查bucket名称是否为空
-	if len(bucket_name) == 0 {
-		return "", ErrBucketRequired
-	}
-
-	// 检查object名称是否为空
-	if len(object_name) == 0 {
-		return "", ErrObjectNameRequired
-	}
+func signUploadURL(object_name string, expire_time time.Duration) (string, error) {
+	region := os.Getenv("REGION")
+	bucket_name := os.Getenv("BUCKET_NAME")
 
 	// 加载默认配置并设置凭证提供者和区域
 	cfg := oss.LoadDefaultConfig().
@@ -65,24 +51,9 @@ func signUploadURL(region string,
 }
 
 // signDownloadURL 生成预签名下载url
-func signDownloadURL(region string,
-	bucket_name string,
-	object_name string,
-	expire_time time.Duration) (string, error) {
-	// 检查region是否为空
-	if len(region) == 0 {
-		return "", ErrRegionRequired
-	}
-
-	// 检查bucket名称是否为空
-	if len(bucket_name) == 0 {
-		return "", ErrBucketRequired
-	}
-
-	// 检查object名称是否为空
-	if len(object_name) == 0 {
-		return "", ErrObjectNameRequired
-	}
+func signDownloadURL(object_name string, expire_time time.Duration) (string, error) {
+	region := os.Getenv("REGION")
+	bucket_name := os.Getenv("BUCKET_NAME")
 
 	// 加载默认配置并设置凭证提供者和区域
 	cfg := oss.LoadDefaultConfig().
@@ -122,6 +93,7 @@ func uploadMessage(client MQTT.Client,
 		Path      string `json:"path"`
 		ImgURL    string `json:"url"`
 	}{timestamp.Format("2006-01-02 15:04:05"), status, path, url}
+
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 	encoder.SetEscapeHTML(false) // 禁用转义
@@ -132,7 +104,7 @@ func uploadMessage(client MQTT.Client,
 }
 
 // Upload 回调函数，处理来自mcu的上传请求
-func Upload(client MQTT.Client, uuid string, payload string) {
+func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 	// {"timestamp":string, "plateid":int, "imgpath":string, "txtpath":string, "number":int}
 	var json_result struct {
 		Timestamp string `json:"timestamp"`
@@ -166,10 +138,7 @@ func Upload(client MQTT.Client, uuid string, payload string) {
 	img_path := uuid + "/" +
 		strconv.Itoa(json_result.PlateID) + "/" +
 		timestamp.Format("20060102-150405") + ".jpg"
-	img_url, err := signUploadURL("cn-hangzhou",
-		"embedded-comptition",
-		img_path,
-		10*time.Minute)
+	img_url, err := signUploadURL(img_path, 10*time.Minute)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))
 		// TODO
@@ -181,10 +150,7 @@ func Upload(client MQTT.Client, uuid string, payload string) {
 	txt_path := uuid + "/" +
 		strconv.Itoa(json_result.PlateID) + "/" +
 		timestamp.Format("20060102-150405") + ".txt"
-	txt_url, err := signUploadURL("cn-hangzhou",
-		"embedded-comptition",
-		txt_path,
-		10*time.Minute)
+	txt_url, err := signUploadURL(txt_path, 10*time.Minute)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))
 		// TODO
