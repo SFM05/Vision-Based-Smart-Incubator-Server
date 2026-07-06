@@ -52,7 +52,7 @@ func OnDataReceived(uuid string, payload string) {
 	}
 
 	table_name := os.Getenv("ENV_TABLE_NAME")
-	measurement_name := os.Getenv("ENV_MEATURE_NAME")
+	measurement_name := os.Getenv("ENV_MEASURE_NAME")
 
 	// 构造时序数据行 timeseriesRow。
 	// timeseriesKey 标识时间线：度量名称、数据源主机和标签。
@@ -93,7 +93,7 @@ func RecordColonyData(uuid string,
 	client := InitClient()
 
 	table_name := os.Getenv("COLONY_TABLE_NAME")
-	measurement_name := os.Getenv("COLONY_MEATURE_NAME")
+	measurement_name := os.Getenv("COLONY_MEASURE_NAME")
 
 	// 构造时序数据行 timeseriesRow。
 	// timeseriesKey 标识时间线：度量名称、数据源主机和标签。

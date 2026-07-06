@@ -86,7 +86,7 @@ func GetColony(uuid string, plateid int, start time.Time, end time.Time) string 
 	client := tablestore.NewTimeseriesClient(endpoint, instanceName, accessKeyId, accessKeySecret)
 
 	table_name := os.Getenv("COLONY_TABLE_NAME")
-	measurement_name := os.Getenv("COLONY_MEATURE_NAME")
+	measurement_name := os.Getenv("COLONY_MEASURE_NAME")
 
 	// 构造待查询时间线的 timeseriesKey。
 	timeseriesKey := tablestore.NewTimeseriesKey()
@@ -127,7 +127,7 @@ func GetColony(uuid string, plateid int, start time.Time, end time.Time) string 
 		record := getFileMetaData(record_path, 10*time.Minute)
 
 		data := ColonyMetaData{
-			Timestamp: timestamp.Format("2006-01-02T15:04:05Z"),
+			Timestamp: timestamp.UTC().Format(time.RFC3339),
 			Number:    rows["number"].Value.(int64),
 			Image:     image,
 			Record:    record,

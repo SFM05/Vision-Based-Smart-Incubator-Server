@@ -35,7 +35,7 @@ func GetEnv(uuid string, start time.Time, end time.Time) string {
 	client := tablestore.NewTimeseriesClient(endpoint, instanceName, accessKeyId, accessKeySecret)
 
 	table_name := os.Getenv("ENV_TABLE_NAME")
-	measurement_name := os.Getenv("ENV_MEATURE_NAME")
+	measurement_name := os.Getenv("ENV_MEASURE_NAME")
 
 	// 构造待查询时间线的 timeseriesKey。
 	timeseriesKey := tablestore.NewTimeseriesKey()
@@ -70,7 +70,7 @@ func GetEnv(uuid string, start time.Time, end time.Time) string {
 		rows := getTimeseriesResp.GetRows()[i].GetFieldsMap()
 
 		data := EnvMetaData{
-			Timestamp: timestamp.Format("2006-01-02T15:04:05Z"),
+			Timestamp: timestamp.UTC().Format(time.RFC3339),
 			Temp:      rows["temperature"].Value.(float64),
 			Hum:       rows["humidity"].Value.(float64),
 		}

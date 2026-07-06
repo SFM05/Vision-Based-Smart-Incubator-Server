@@ -180,7 +180,7 @@ func OnUploadSucess(uuid string, payload string) {
 
 	client := InitClient()
 	table_name := os.Getenv("COLONY_TABLE_NAME")
-	measurement_name := os.Getenv("COLONY_MEATURE_NAME")
+	measurement_name := os.Getenv("COLONY_MEASURE_NAME")
 
 	// 构造待查询时间线的 timeseriesKey。
 	timeseriesKey := tablestore.NewTimeseriesKey()

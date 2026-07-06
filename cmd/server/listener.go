@@ -41,9 +41,10 @@ var messageHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Messa
 func main() {
 	username := os.Getenv("USERNAME")
 	password := os.Getenv("PASSWORD")
+	port := os.Getenv("PORT")
 
 	opts := MQTT.NewClientOptions()
-	opts.AddBroker("tcp://localhost:1883")
+	opts.AddBroker(port)
 	opts.SetClientID("go-subscriber-1")
 	opts.SetUsername(username)
 	opts.SetPassword(password)
