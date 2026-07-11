@@ -24,6 +24,32 @@ var (
 	ErrObjectNameRequired = errors.New("object name is required")
 )
 
+// 文件是否存在
+func Existed(object_name string) bool {
+
+	region := os.Getenv("REGION")
+	bucket_name := os.Getenv("BUCKET_NAME")
+
+	// 加载默认配置并设置凭证提供者和区域
+	cfg := oss.LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
+		WithRegion(region)
+
+	// 创建OSS客户端
+	client := oss.NewClient(cfg)
+
+	existed, err := client.IsObjectExist(context.TODO(), bucket_name, object_name)
+	if err != nil {
+		return false
+	} else {
+		if existed {
+			return true
+		} else {
+			return false
+		}
+	}
+}
+
 // SignURL 生成预签名上传URL
 func signUploadURL(object_name string, expire_time time.Duration) (string, error) {
 	region := os.Getenv("REGION")
@@ -122,7 +148,7 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 
 	// 解析时间
 	loc, _ := time.LoadLocation("Asia/Shanghai")
-	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", json_result.Timestamp, loc)
+	timestamp, err := time.ParseInLocation("20060102-150405", json_result.Timestamp, loc)
 	if err != nil {
 		// 解析时间失败时使用服务器时间作为替代
 		slog.Warn(fmt.Sprintf("Time parse fail: %v", err))
@@ -162,4 +188,24 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 		json_result.Number)
 
 	slog.Info("Publish upload reply success")
+
+	time.Sleep(60 * time.Second)
+	if Existed(img_path) {
+		slog.Info(fmt.Sprintf("File upload secess after 60s: %s", img_path))
+		// UploadSucess(uuid, timestamp, json_result.PlateID)
+		return
+	}
+	time.Sleep(60 * time.Second)
+	if Existed(img_path) {
+		slog.Info(fmt.Sprintf("File upload secess after 120s: %s", img_path))
+		// UploadSucess(uuid, timestamp, json_result.PlateID)
+		return
+	}
+	time.Sleep(480 * time.Second)
+	if Existed(img_path) {
+		slog.Info(fmt.Sprintf("File upload secess after 600s: %s", img_path))
+		// UploadSucess(uuid, timestamp, json_result.PlateID)
+		return
+	}
+	slog.Info(fmt.Sprintf("Fail to receive file: %s", img_path))
 }

@@ -43,7 +43,7 @@ func OnDataReceived(uuid string, payload string) {
 	}
 
 	loc, _ := time.LoadLocation("Asia/Shanghai")
-	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", json_result.TimeStamp, loc)
+	timestamp, err := time.ParseInLocation("20060102-150405", json_result.TimeStamp, loc)
 	if err != nil {
 		slog.Warn(fmt.Sprintf("Time parse fail: %v", err))
 		slog.Warn(fmt.Sprintf("    Original time: %s", json_result.TimeStamp))

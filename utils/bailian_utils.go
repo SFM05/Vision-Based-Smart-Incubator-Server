@@ -147,32 +147,10 @@ func BailianInference(img_path string, model_name string) (string, string) {
 	return reasoning_content, content
 }
 
-// OnUploadSucess 回调函数，处理上传成功的图片
-func OnUploadSucess(uuid string, payload string) {
-	// {"timestamp":string, "plateid":int}
-	var json_result struct {
-		Timestamp string `json:"timestamp"`
-		PlateID   int    `json:"plateid"`
-	}
-	err := json.Unmarshal([]byte(payload), &json_result)
-	if err != nil {
-		slog.Error(fmt.Sprintf("Encounter error when decoding json: %v", err))
-		slog.Error(fmt.Sprintf("    Original message: %s", payload))
-		return
-	}
-
-	// 解析时间
-	loc, _ := time.LoadLocation("Asia/Shanghai")
-	timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", json_result.Timestamp, loc)
-	if err != nil {
-		slog.Error(fmt.Sprintf("Time parse fail: %v", err))
-		slog.Error(fmt.Sprintf("    Original time: %s", json_result.Timestamp))
-		return
-	}
-
+func UploadSucess(uuid string, timestamp time.Time, plateid int) {
 	// 生成图片的预签名URL
 	img_path := uuid + "/" +
-		strconv.Itoa(json_result.PlateID) + "/" +
+		strconv.Itoa(plateid) + "/" +
 		timestamp.Format("20060102-150405") + ".jpg"
 
 	model_name := os.Getenv("MODEL_NAME")
@@ -186,7 +164,7 @@ func OnUploadSucess(uuid string, payload string) {
 	timeseriesKey := tablestore.NewTimeseriesKey()
 	timeseriesKey.SetMeasurementName(measurement_name)
 	timeseriesKey.SetDataSource(uuid)
-	timeseriesKey.AddTag("plate_id", strconv.Itoa(json_result.PlateID))
+	timeseriesKey.AddTag("plate_id", strconv.Itoa(plateid))
 
 	// 构造查询请求。
 	getTimeseriesDataRequest := tablestore.NewGetTimeseriesDataRequest(table_name)
@@ -209,7 +187,7 @@ func OnUploadSucess(uuid string, payload string) {
 			timeseriesKey := tablestore.NewTimeseriesKey()
 			timeseriesKey.SetMeasurementName(measurement_name)
 			timeseriesKey.SetDataSource(uuid)
-			timeseriesKey.AddTag("plate_id", strconv.Itoa(json_result.PlateID))
+			timeseriesKey.AddTag("plate_id", strconv.Itoa(plateid))
 
 			// timeseriesRow 在 timeseriesKey 的基础上关联时间戳和字段值。
 			timeseriesRow := tablestore.NewTimeseriesRow(timeseriesKey)

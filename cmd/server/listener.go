@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -27,11 +28,17 @@ var messageHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Messa
 	switch request {
 	case "upload":
 		slog.Info(fmt.Sprintf("Receive upload request from %s", uuid))
-		utils.OnUploadRequest(client, uuid, payload)
+		go utils.OnUploadRequest(client, uuid, payload)
 
 	case "data":
 		slog.Info(fmt.Sprintf("Receive environment data from %s", uuid))
 		go utils.OnDataReceived(uuid, payload)
+
+	case "time":
+		client.Publish("server"+"/"+uuid+"/"+"time",
+			1,
+			false,
+			strconv.Itoa(time.Now().Second()))
 
 	default:
 		slog.Warn(fmt.Sprintf("Receive unkown message from %s: %s", uuid, payload))
