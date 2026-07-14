@@ -160,7 +160,7 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 	// 生成图片的预签名URL
 	img_path := uuid + "/" +
 		strconv.Itoa(json_result.PlateID) + "/" +
-		timestamp.Format("20060102-150405") + ".jpg"
+		timestamp.Format("20060102-150405") + ".bmp"
 	img_url, err := signUploadURL(img_path, 10*time.Minute)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))

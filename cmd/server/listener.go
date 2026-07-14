@@ -41,6 +41,10 @@ var messageHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Messa
 			false,
 			strconv.Itoa(time.Now().Second()))
 
+	case "warn":
+		slog.Info(fmt.Sprintf("Receive warning from %s", uuid))
+		go utils.SendAlert(uuid, "杂菌警告", "疑似发现杂菌，请予以关注。")
+
 	default:
 		slog.Warn(fmt.Sprintf("Receive unkown message from %s: %s", uuid, payload))
 	}
