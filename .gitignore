@@ -1,4 +1,7 @@
 AGENTS.md
+.env
+.env.*
+!.env.example
 env.sh
 cmd/scripts
 bin

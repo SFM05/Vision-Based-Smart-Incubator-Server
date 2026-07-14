@@ -12,6 +12,7 @@ import (
 
 	"mqtt_listener/utils"
 
+	"github.com/joho/godotenv"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -46,6 +47,10 @@ var messageHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Messa
 }
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("no .env file found, using environment variables", "error", err)
+	}
+
 	username := os.Getenv("USERNAME")
 	password := os.Getenv("PASSWORD")
 	port := os.Getenv("PORT")

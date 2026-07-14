@@ -46,8 +46,8 @@
 复制环境变量模板并填入真实凭据：
 
 ```bash
-# 编辑好 env.sh 填入密钥
-source env.sh
+cp .env.example .env
+# 编辑 .env 填入密钥
 ```
 
 ### 构建
@@ -95,9 +95,9 @@ go build -o bin/web ./cmd/web/
 | `TABLE_INSTANCE_NAME` | 实例名称 |
 | `TABLE_ENDPOINT` | 实例访问地址 |
 | `ENV_TABLE_NAME` | 环境数据表名 |
-| `ENV_MEATURE_NAME` | 环境数据度量名 |
+| `ENV_MEASURE_NAME` | 环境数据度量名 |
 | `COLONY_TABLE_NAME` | 菌落数据表名 |
-| `COLONY_MEATURE_NAME` | 菌落数据度量名 |
+| `COLONY_MEASURE_NAME` | 菌落数据度量名 |
 
 ### MQTT
 
@@ -167,7 +167,8 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 │   ├── env.go                # /api/env 查询逻辑
 │   └── clonony.go            # /api/colony 查询逻辑
 ├── go.mod / go.sum           # Go 模块依赖
-└── env.sh                    # 环境变量（已 gitignore，需自行完善，请勿提交！）
+├── .env.example              # 环境变量模板（可提交）
+└── .env                      # 环境变量（已 gitignore，请勿提交！）
 ```
 
 ## MQTT 消息协议

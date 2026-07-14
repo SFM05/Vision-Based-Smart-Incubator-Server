@@ -7,9 +7,15 @@ import (
 	"time"
 
 	"mqtt_listener/web"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("no .env file found, using environment variables:", err)
+	}
+
 	fs := http.FileServer(http.Dir("static"))
 
 	http.HandleFunc("/api/env", handleEnvQuery)
