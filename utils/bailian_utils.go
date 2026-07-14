@@ -151,7 +151,7 @@ func UploadSucess(uuid string, timestamp time.Time, plateid int) {
 	// 生成图片的预签名URL
 	img_path := uuid + "/" +
 		strconv.Itoa(plateid) + "/" +
-		timestamp.Format("20060102-150405") + ".jpg"
+		timestamp.Format("20060102-150405") + ".bmp"
 
 	model_name := os.Getenv("MODEL_NAME")
 	_, content := BailianInference(img_path, model_name)
