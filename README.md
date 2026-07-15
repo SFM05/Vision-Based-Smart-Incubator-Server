@@ -117,6 +117,8 @@ go build -o bin/web ./cmd/web/
 | `DEST_EMAIL` | 收件人邮箱 |
 | `AUTHCODE` | SMTP 授权码 |
 
+> 不启用邮件告警时，这一组变量可以不填。
+
 ## API 文档
 
 ### 查询环境数据
