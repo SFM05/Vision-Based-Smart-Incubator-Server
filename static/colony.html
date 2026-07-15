@@ -393,6 +393,11 @@
   function updateBoxTable() {
     var tbody = document.getElementById('box-tbody');
     tbody.innerHTML = '';
+    if (boxes.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5">暂无识别框</td></tr>';
+      document.getElementById('modal-count').textContent = '菌落数: 0';
+      return;
+    }
     for (var i = 0; i < boxes.length; i++) {
       var b = boxes[i];
       var row = document.createElement('tr');
@@ -468,6 +473,7 @@
       loadFired = true;
 
       imgLoader.classList.add('loaded');
+      document.getElementById('img-container').classList.remove('image-loading');
 
       clearOverlays();
 
@@ -504,14 +510,19 @@
     };
 
     img.onload = null;
+    img.onerror = null;
 
     document.getElementById('modal').classList.add('active');
 
     if (item.image && item.image.success && item.image.url) {
+      document.getElementById('img-container').classList.add('image-loading');
       imgLoader.classList.remove('loaded');
+      imgLoader.innerHTML = '<div class="spinner"></div>Loading image...';
       img.onload = loadHandler;
       img.onerror = function() {
-        imgLoader.classList.add('loaded');
+        document.getElementById('img-container').classList.add('image-loading');
+        imgLoader.classList.remove('loaded');
+        imgLoader.innerHTML = 'Image failed to load';
         document.getElementById('box-tbody').innerHTML = '<tr><td colspan="5">图片加载失败，无法显示识别数据</td></tr>';
       };
       img.src = item.image.url;
@@ -519,7 +530,9 @@
         loadHandler();
       }
     } else {
-      imgLoader.classList.add('loaded');
+      document.getElementById('img-container').classList.add('image-loading');
+      imgLoader.classList.remove('loaded');
+      imgLoader.innerHTML = 'Image unavailable';
       img.src = '';
       showError('图片不可用');
       return;

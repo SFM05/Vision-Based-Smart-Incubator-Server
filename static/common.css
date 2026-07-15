@@ -802,6 +802,12 @@ body {
   overflow: hidden;
 }
 
+.img-container.image-loading {
+  width: min(720px, 80vw);
+  min-height: 320px;
+  background: var(--border-light);
+}
+
 .img-container img {
   display: block;
   max-width: 100%;

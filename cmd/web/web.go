@@ -53,7 +53,7 @@ func main() {
 		Addr:              ":8080",
 		Handler:           handler,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      120 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}

@@ -46,7 +46,12 @@ func signDownloadURL(objectName string, expireTime time.Duration) (string, error
 }
 
 func callBailian(imgURL string, modelName string) (string, error) {
-	client := &http.Client{}
+	apiKey := os.Getenv("DASHSCOPE_API_KEY")
+	if apiKey == "" {
+		return "", fmt.Errorf("DASHSCOPE_API_KEY not configured")
+	}
+
+	client := &http.Client{Timeout: 90 * time.Second}
 	requestBody := struct {
 		Model    string `json:"model"`
 		Messages []struct {
@@ -59,8 +64,8 @@ func callBailian(imgURL string, modelName string) (string, error) {
 				} `json:"image_url,omitempty"`
 			} `json:"content"`
 		} `json:"messages"`
-		Stream         bool `json:"stream"`
-		StreamOptions  *struct {
+		Stream        bool `json:"stream"`
+		StreamOptions *struct {
 			IncludeUsage bool `json:"include_usage"`
 		} `json:"stream_options,omitempty"`
 		EnableThinking bool `json:"enable_thinking,omitempty"`
@@ -98,7 +103,7 @@ func callBailian(imgURL string, modelName string) (string, error) {
 				},
 			},
 		},
-		Stream:        true,
+		Stream: true,
 		StreamOptions: &struct {
 			IncludeUsage bool `json:"include_usage"`
 		}{IncludeUsage: true},
@@ -114,7 +119,6 @@ func callBailian(imgURL string, modelName string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
-	apiKey := os.Getenv("DASHSCOPE_API_KEY")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -130,6 +134,7 @@ func callBailian(imgURL string, modelName string) (string, error) {
 
 	content := ""
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {
@@ -155,6 +160,9 @@ func callBailian(imgURL string, modelName string) (string, error) {
 			}
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("read stream: %w", err)
+	}
 
 	return content, nil
 }
@@ -163,20 +171,6 @@ func AnalyzeColony(uuid string, plateid int, timestamp string) AnalyzeResponse {
 	modelName := os.Getenv("MODEL_NAME")
 	if modelName == "" {
 		return AnalyzeResponse{Success: false, Message: "MODEL_NAME not configured"}
-	}
-
-	imgPath := uuid + "/" +
-		strconv.Itoa(plateid) + "/" +
-		timestamp + ".bmp"
-
-	imgURL, err := signDownloadURL(imgPath, 10*time.Minute)
-	if err != nil {
-		return AnalyzeResponse{Success: false, Message: "Failed to sign image URL: " + err.Error()}
-	}
-
-	reply, err := callBailian(imgURL, modelName)
-	if err != nil {
-		return AnalyzeResponse{Success: false, Message: "AI inference failed: " + err.Error()}
 	}
 
 	loc, _ := time.LoadLocation("Asia/Shanghai")
@@ -214,31 +208,10 @@ func AnalyzeColony(uuid string, plateid int, timestamp string) AnalyzeResponse {
 	}
 
 	found := false
+	var existingFields map[string]*tablestore.ColumnValue
 	for i := 0; i < len(getResp.GetRows()); i++ {
 		if getResp.GetRows()[i].GetTimeInus() == truncatedUs {
-			rows := getResp.GetRows()[i].GetFieldsMap()
-
-			writeKey := tablestore.NewTimeseriesKey()
-			writeKey.SetMeasurementName(measurementName)
-			writeKey.SetDataSource(uuid)
-			writeKey.AddTag("plate_id", strconv.Itoa(plateid))
-
-			writeRow := tablestore.NewTimeseriesRow(writeKey)
-			writeRow.SetTimeInus(truncatedUs)
-
-			for key, value := range rows {
-				writeRow.AddField(key, value)
-			}
-			writeRow.AddField("reply",
-				tablestore.NewColumnValue(tablestore.ColumnType_STRING, reply))
-
-			putReq := tablestore.NewPutTimeseriesDataRequest(tableName)
-			putReq.AddTimeseriesRows(writeRow)
-
-			_, err := client.PutTimeseriesData(putReq)
-			if err != nil {
-				return AnalyzeResponse{Success: false, Message: "Failed to write reply: " + err.Error()}
-			}
+			existingFields = getResp.GetRows()[i].GetFieldsMap()
 			found = true
 			break
 		}
@@ -246,6 +219,45 @@ func AnalyzeColony(uuid string, plateid int, timestamp string) AnalyzeResponse {
 
 	if !found {
 		return AnalyzeResponse{Success: false, Message: "No matching colony record found"}
+	}
+
+	imgPath := uuid + "/" +
+		strconv.Itoa(plateid) + "/" +
+		timestamp + ".bmp"
+
+	imgURL, err := signDownloadURL(imgPath, 10*time.Minute)
+	if err != nil {
+		return AnalyzeResponse{Success: false, Message: "Failed to sign image URL: " + err.Error()}
+	}
+
+	reply, err := callBailian(imgURL, modelName)
+	if err != nil {
+		return AnalyzeResponse{Success: false, Message: "AI inference failed: " + err.Error()}
+	}
+
+	writeKey := tablestore.NewTimeseriesKey()
+	writeKey.SetMeasurementName(measurementName)
+	writeKey.SetDataSource(uuid)
+	writeKey.AddTag("plate_id", strconv.Itoa(plateid))
+
+	writeRow := tablestore.NewTimeseriesRow(writeKey)
+	writeRow.SetTimeInus(truncatedUs)
+
+	for key, value := range existingFields {
+		if key == "reply" {
+			continue
+		}
+		writeRow.AddField(key, value)
+	}
+	writeRow.AddField("reply",
+		tablestore.NewColumnValue(tablestore.ColumnType_STRING, reply))
+
+	putReq := tablestore.NewPutTimeseriesDataRequest(tableName)
+	putReq.AddTimeseriesRows(writeRow)
+
+	_, err = client.PutTimeseriesData(putReq)
+	if err != nil {
+		return AnalyzeResponse{Success: false, Message: "Failed to write reply: " + err.Error()}
 	}
 
 	return AnalyzeResponse{Success: true, Reply: reply}
