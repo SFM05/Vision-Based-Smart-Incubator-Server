@@ -457,7 +457,7 @@
                 var scaleY = displayH / img.naturalHeight;
 
                 if (item.record && item.record.success && item.record.url) {
-                    fetch(item.record.url + '?t=' + Date.now())
+                    fetch(item.record.url)
                         .then(function(r) { return r.text(); })
                         .then(function(text) {
                             tbody.innerHTML = '';

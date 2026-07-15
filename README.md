@@ -129,13 +129,14 @@ GET /api/env?uuid=<设备UUID>&start=<起始微秒>&end=<结束微秒>
 
 ```json
 {
-  "success": true,
-  "message": "success",
+  "sucess": true,
   "env": [
     {"timestamp": "2026-06-27 12:00:00", "temp": 37.5, "hum": 65.2}
   ]
 }
 ```
+
+> `/api/env` currently returns the legacy field name `sucess` for frontend compatibility.
 
 ### 查询菌落数据
 
@@ -148,7 +149,6 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 ```json
 {
   "success": true,
-  "message": "success",
   "colony": [
     {
       "timestamp": "2026-06-27 12:00:00",
@@ -238,4 +238,5 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 - **时区**：所有 MQTT 时间戳使用 `Asia/Shanghai`，格式 `"20060102-150405"`，解析失败时回退为当前时间
 - **时间精度**：Tablestore 写入时时间戳截断到整秒（微秒值向下取整）
 - **预签名 URL 有效期**：均为 10 分钟
+- **OSS CORS**：`colony.html` 会在浏览器中 `fetch` 识别记录文本，OSS Bucket 需要允许 Web 页面来源的跨域 GET 请求
 - **MQTT Broker 地址**：通过 `PORT` 环境变量配置，如 `tcp://localhost:1883`
