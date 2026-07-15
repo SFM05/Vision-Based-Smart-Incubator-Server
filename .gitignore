@@ -4,6 +4,7 @@
 env.sh
 cmd/scripts
 bin
+logs/
 *.exe
 *.test
 *.out

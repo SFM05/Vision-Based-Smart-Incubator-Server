@@ -39,11 +39,11 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 echo "Starting MQTT listener..."
-"$LISTENER_BIN" >> "$LOG_DIR/listener.log" 2>&1 &
+"$LISTENER_BIN" > >(tee -a "$LOG_DIR/listener.log") 2>&1 &
 LISTENER_PID=$!
 
 echo "Starting web server on :8080..."
-"$WEB_BIN" >> "$LOG_DIR/web.log" 2>&1 &
+"$WEB_BIN" > >(tee -a "$LOG_DIR/web.log") 2>&1 &
 WEB_PID=$!
 
 echo "Started backends: listener PID $LISTENER_PID, web PID $WEB_PID"
