@@ -74,6 +74,14 @@ function hideInfo() {
 }
 
 function initTimeDefaults() {
+  var uuidInput = document.getElementById('uuid');
+  if (uuidInput) {
+    var saved = localStorage.getItem('incubator_uuid');
+    if (saved) uuidInput.value = saved;
+    uuidInput.addEventListener('input', function() {
+      localStorage.setItem('incubator_uuid', uuidInput.value.trim());
+    });
+  }
   var now = new Date();
   document.getElementById('end-time').value = formatDatetimeLocal(now);
   document.getElementById('start-time').value = formatDatetimeLocal(new Date(now.getTime() - 3600000));
