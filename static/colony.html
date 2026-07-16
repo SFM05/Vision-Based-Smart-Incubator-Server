@@ -88,15 +88,15 @@
     </div>
     <div id="colony-summary" class="summary-cards hidden">
       <div class="summary-card">
-        <div class="summary-label">Total Images</div>
+        <div class="summary-label">图像总数</div>
         <div class="summary-value" id="sum-total-images">--</div>
       </div>
       <div class="summary-card">
-        <div class="summary-label">Total Colonies</div>
+        <div class="summary-label">菌落总数</div>
         <div class="summary-value" id="sum-total-colonies">--</div>
       </div>
       <div class="summary-card">
-        <div class="summary-label">Latest Capture</div>
+        <div class="summary-label">最新采集</div>
         <div class="summary-value" id="sum-latest-time">--</div>
       </div>
     </div>
@@ -117,36 +117,36 @@
       <div class="modal-toolbar">
         <button class="btn-secondary" id="edit-mode-btn" onclick="toggleEditMode()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Edit Boxes
+          编辑框
         </button>
         <button class="btn-secondary hidden" id="delete-box-btn" onclick="deleteSelectedBox()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          Delete Selected
+          删除所选
         </button>
         <button class="btn-secondary hidden" id="save-correction-btn" onclick="saveCorrections()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-          Save Corrections
+          保存修正
         </button>
         <button class="btn-secondary hidden" id="download-corrected-btn" onclick="downloadCorrectedRecord()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-          Download Corrected
+          下载修正数据
         </button>
       </div>
       <div class="edit-hint hidden" id="edit-hint">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        Drag inside the image to draw a new user box. Click a box to select it, then press Delete. Deleting an auto box only marks it hidden in user corrections; original record data is not changed.
+        在图片内拖动以绘制新的用户框。点击框以选中，然后按 Delete 键。删除自动框仅在用户修正中标记为隐藏，原始记录数据不会被修改。
       </div>
       <div class="img-container" id="img-container">
         <div class="modal-img-loader" id="modal-img-loader">
           <div class="spinner"></div>
-          Loading image...
+          加载图片中...
         </div>
         <img id="modal-img" src="" alt="菌落图像">
       </div>
       <div class="modal-footer">
         <div class="box-list" id="box-list">
           <table>
-            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>Confidence</th><th>Source</th></tr></thead>
+            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>置信度</th><th>来源</th></tr></thead>
             <tbody id="box-tbody"></tbody>
           </table>
         </div>
@@ -164,14 +164,14 @@
       <div class="ai-panel" id="ai-panel">
         <div class="ai-panel-header">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-          <span>AI Analysis</span>
+          <span>AI 分析</span>
           <button class="btn-secondary" id="ai-analyze-btn" onclick="runAnalyze()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            Run AI Analysis
+            运行 AI 分析
           </button>
         </div>
         <div class="ai-panel-body" id="ai-panel-body">
-          <span class="ai-placeholder">No AI analysis available. Click "Run AI Analysis" to generate.</span>
+          <span class="ai-placeholder">暂无 AI 分析结果。点击"运行 AI 分析"生成。</span>
         </div>
       </div>
     </div>
@@ -583,7 +583,7 @@
 
       overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf, source) {
         return function(e) {
-          var label = source === 'user' ? 'manual' : (bconf * 100).toFixed(1) + '%';
+          var label = source === 'user' ? '手动' : (bconf * 100).toFixed(1) + '%';
           tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + label;
           tooltip.style.display = 'block';
           positionTooltip(e, tooltip);
@@ -616,7 +616,7 @@
       var b = visibleBoxes[i];
       var row = document.createElement('tr');
       if (i === selectedBoxIndex) row.classList.add('selected-row');
-      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : 'manual') + '</td><td>' + (b.source === 'user' ? 'Manual' : 'Auto') + '</td>';
+      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : '手动') + '</td><td>' + (b.source === 'user' ? '手动' : '自动') + '</td>';
       row.addEventListener('click', (function(idx) {
         return function() {
           selectedBoxIndex = (selectedBoxIndex === idx) ? -1 : idx;
@@ -679,12 +679,12 @@
       aiBody.innerHTML = '<div class="ai-reply">' + escapeHtml(item.reply) + '</div>';
       document.getElementById('ai-analyze-btn').style.display = 'none';
     } else {
-      aiBody.innerHTML = '<span class="ai-placeholder">No AI analysis available. Click "Run AI Analysis" to generate.</span>';
+      aiBody.innerHTML = '<span class="ai-placeholder">暂无 AI 分析结果。点击"运行 AI 分析"生成。</span>';
       document.getElementById('ai-analyze-btn').style.display = '';
     }
 
     var tbody = document.getElementById('box-tbody');
-    tbody.innerHTML = '<tr><td colspan="6" class="table-loading-cell"><div class="spinner"></div> Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="table-loading-cell"><div class="spinner"></div> 加载中...</td></tr>';
 
     clearOverlays();
 
@@ -754,12 +754,12 @@
     if (item.image && item.image.success && item.image.url) {
       document.getElementById('img-container').classList.add('image-loading');
       imgLoader.classList.remove('loaded');
-      imgLoader.innerHTML = '<div class="spinner"></div>Loading image...';
+      imgLoader.innerHTML = '<div class="spinner"></div>加载图片中...';
       img.onload = loadHandler;
       img.onerror = function() {
         document.getElementById('img-container').classList.add('image-loading');
         imgLoader.classList.remove('loaded');
-        imgLoader.innerHTML = 'Image failed to load';
+        imgLoader.innerHTML = '图片加载失败';
         document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">图片加载失败，无法显示识别数据</td></tr>';
       };
       img.src = item.image.url;
@@ -769,7 +769,7 @@
     } else {
       document.getElementById('img-container').classList.add('image-loading');
       imgLoader.classList.remove('loaded');
-      imgLoader.innerHTML = 'Image unavailable';
+      imgLoader.innerHTML = '图片不可用';
       img.src = '';
       showError('图片不可用');
       return;
@@ -986,7 +986,7 @@
     var previousHtml = btn.innerHTML;
     var correction = serializeUserCorrections();
     btn.disabled = true;
-    btn.textContent = 'Saving...';
+    btn.textContent = '保存中...';
 
     try {
       var resp = await fetch('/api/colony/correction', {
@@ -1024,8 +1024,8 @@
     var btn = document.getElementById('ai-analyze-btn');
     var body = document.getElementById('ai-panel-body');
     btn.disabled = true;
-    btn.textContent = 'Analyzing...';
-    body.innerHTML = '<div class="ai-loading"><div class="spinner"></div>Running AI analysis, please wait...</div>';
+    btn.textContent = '分析中...';
+    body.innerHTML = '<div class="ai-loading"><div class="spinner"></div>AI 分析中，请稍候...</div>';
 
     try {
       var resp = await fetch('/api/colony/analyze', {
@@ -1039,13 +1039,13 @@
         item.reply = data.reply;
         btn.style.display = 'none';
       } else {
-        body.innerHTML = '<span class="ai-error">Analysis failed: ' + escapeHtml(data.message || 'Unknown error') + '</span>';
+        body.innerHTML = '<span class="ai-error">分析失败：' + escapeHtml(data.message || '未知错误') + '</span>';
       }
     } catch (err) {
-      body.innerHTML = '<span class="ai-error">Request failed: ' + escapeHtml(err.message) + '</span>';
+      body.innerHTML = '<span class="ai-error">请求失败：' + escapeHtml(err.message) + '</span>';
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Run AI Analysis';
+      btn.textContent = '运行 AI 分析';
     }
   }
 
