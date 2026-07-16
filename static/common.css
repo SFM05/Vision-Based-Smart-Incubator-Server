@@ -985,7 +985,8 @@ select.form-input,
   gap: 8px;
 }
 
-.download-btns a {
+.download-btns a,
+.download-btns button {
   padding: 10px 22px;
   color: #fff;
   border: none;
@@ -1004,9 +1005,11 @@ select.form-input,
   gap: 8px;
 }
 
-.download-btns a svg {
+.download-btns a svg,
+.download-btns button svg {
   width: 16px;
   height: 16px;
+  color: currentColor;
 }
 
 #download-img-btn {
@@ -1504,7 +1507,8 @@ select.form-input,
     width: 100%;
   }
 
-  .download-btns a {
+  .download-btns a,
+  .download-btns button {
     flex: 1;
   }
 }
