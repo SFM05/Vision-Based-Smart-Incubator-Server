@@ -26,6 +26,7 @@ type ColonyMetaData struct {
 	Image     FileMetaData `json:"image"`
 	Record    FileMetaData `json:"record"`
 	Reply     string       `json:"reply,omitempty"`
+	UserBoxes string       `json:"user_boxes,omitempty"`
 }
 type ColonyResponse struct {
 	Sucess     bool             `json:"success"`
@@ -145,6 +146,7 @@ func GetColony(uuid string, plateid int, start time.Time, end time.Time) string 
 		}
 
 		reply, _ := safeString(rows, "reply")
+		userBoxes, _ := safeString(rows, "user_boxes")
 
 		image := getFileMetaData(image_path, 10*time.Minute)
 		record := getFileMetaData(record_path, 10*time.Minute)
@@ -155,6 +157,7 @@ func GetColony(uuid string, plateid int, start time.Time, end time.Time) string 
 			Image:     image,
 			Record:    record,
 			Reply:     reply,
+			UserBoxes: userBoxes,
 		}
 
 		response.ColonyData = append(response.ColonyData, data)

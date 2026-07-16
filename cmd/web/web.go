@@ -38,6 +38,7 @@ func main() {
 	mux.HandleFunc("/api/env", handleEnvQuery)
 	mux.HandleFunc("/api/colony", handleColonyQuery)
 	mux.HandleFunc("/api/colony/analyze", handleColonyAnalyze)
+	mux.HandleFunc("/api/colony/correction", handleColonyCorrection)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			http.Redirect(w, r, "/env.html", http.StatusMovedPermanently)
@@ -188,5 +189,35 @@ func handleColonyAnalyze(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	result := web.AnalyzeColony(req.UUID, req.PlateID, req.Timestamp)
+	json.NewEncoder(w).Encode(result)
+}
+
+func handleColonyCorrection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"success":false,"message":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		UUID      string          `json:"uuid"`
+		PlateID   int             `json:"plateid"`
+		Timestamp string          `json:"timestamp"`
+		UserBoxes json.RawMessage `json:"user_boxes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"success":false,"message":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.UUID == "" || req.PlateID < 0 || req.Timestamp == "" || len(req.UserBoxes) == 0 {
+		http.Error(w, `{"success":false,"message":"missing required params: uuid, plateid, timestamp, user_boxes"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	result := web.SaveColonyCorrection(req.UUID, req.PlateID, req.Timestamp, req.UserBoxes)
+	if !result.Success {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 	json.NewEncoder(w).Encode(result)
 }

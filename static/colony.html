@@ -122,6 +122,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           Delete Selected
         </button>
+        <button class="btn-secondary hidden" id="save-correction-btn" onclick="saveCorrections()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Save Corrections
+        </button>
         <button class="btn-secondary hidden" id="download-corrected-btn" onclick="downloadCorrectedRecord()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
           Download Corrected
@@ -129,7 +133,7 @@
       </div>
       <div class="edit-hint hidden" id="edit-hint">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        Drag on the image to draw a new box. Click a box to select it, then press Delete or click "Delete Selected".
+        Drag inside the image to draw a new user box. Click a box to select it, then press Delete. Deleting an auto box only marks it hidden in user corrections; original record data is not changed.
       </div>
       <div class="img-container" id="img-container">
         <div class="modal-img-loader" id="modal-img-loader">
@@ -141,7 +145,7 @@
       <div class="modal-footer">
         <div class="box-list" id="box-list">
           <table>
-            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>Confidence</th></tr></thead>
+            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>Confidence</th><th>Source</th></tr></thead>
             <tbody id="box-tbody"></tbody>
           </table>
         </div>
@@ -177,13 +181,16 @@
 <script>
   var currentData = [];
   var editMode = false;
-  var boxes = [];
+  var originalBoxes = [];
+  var userAddedBoxes = [];
+  var deletedOriginalIds = [];
   var selectedBoxIndex = -1;
   var isDrawing = false;
   var drawStart = null;
   var drawOverlay = null;
   var currentModalIndex = -1;
   var currentPlateID = '0';
+  var resizeObserver = null;
 
   async function doQuery(startMicro, endMicro) {
     var uuid = document.getElementById('uuid').value.trim();
@@ -325,10 +332,13 @@
     }
   }
 
-  function getScale() {
+  function getImageMetrics() {
+    var container = document.getElementById('img-container');
     var img = document.getElementById('modal-img');
-    var displayW = img.clientWidth;
-    var displayH = img.clientHeight;
+    var containerRect = container.getBoundingClientRect();
+    var imgRect = img.getBoundingClientRect();
+    var displayW = imgRect.width || img.clientWidth;
+    var displayH = imgRect.height || img.clientHeight;
     if (displayW === 0 || displayH === 0) {
       displayW = img.naturalWidth;
       displayH = img.naturalHeight;
@@ -337,8 +347,94 @@
       scaleX: displayW / img.naturalWidth,
       scaleY: displayH / img.naturalHeight,
       displayW: displayW,
-      displayH: displayH
+      displayH: displayH,
+      offsetX: imgRect.left - containerRect.left,
+      offsetY: imgRect.top - containerRect.top
     };
+  }
+
+  function makeOriginalBox(box, originalIndex) {
+    return {
+      x1: box.x1,
+      y1: box.y1,
+      x2: box.x2,
+      y2: box.y2,
+      conf: box.conf,
+      source: 'auto',
+      originalIndex: originalIndex
+    };
+  }
+
+  function normalizeBox(box, source, originalIndex) {
+    var x1 = Math.max(0, Math.min(box.x1, box.x2));
+    var y1 = Math.max(0, Math.min(box.y1, box.y2));
+    var x2 = Math.min(document.getElementById('modal-img').naturalWidth, Math.max(box.x1, box.x2));
+    var y2 = Math.min(document.getElementById('modal-img').naturalHeight, Math.max(box.y1, box.y2));
+    return {
+      x1: x1,
+      y1: y1,
+      x2: x2,
+      y2: y2,
+      conf: typeof box.conf === 'number' ? box.conf : -1,
+      source: source,
+      originalIndex: originalIndex
+    };
+  }
+
+  function isOriginalDeleted(originalIndex) {
+    return deletedOriginalIds.indexOf(originalIndex) !== -1;
+  }
+
+  function getVisibleBoxes() {
+    var visible = [];
+    for (var i = 0; i < originalBoxes.length; i++) {
+      if (!isOriginalDeleted(i)) {
+        visible.push(makeOriginalBox(originalBoxes[i], i));
+      }
+    }
+    for (var j = 0; j < userAddedBoxes.length; j++) {
+      var b = userAddedBoxes[j];
+      visible.push({x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, conf: -1, source: 'user', userIndex: j});
+    }
+    return visible;
+  }
+
+  function serializeUserCorrections() {
+    return {
+      version: 1,
+      deleted_original_ids: deletedOriginalIds.slice().sort(function(a, b) { return a - b; }),
+      added_boxes: userAddedBoxes.map(function(b) {
+        return {x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, conf: -1};
+      }),
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  function applyUserCorrections(raw) {
+    userAddedBoxes = [];
+    deletedOriginalIds = [];
+    if (!raw) return;
+    try {
+      var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (data && Array.isArray(data.deleted_original_ids)) {
+        for (var i = 0; i < data.deleted_original_ids.length; i++) {
+          var id = parseInt(data.deleted_original_ids[i], 10);
+          if (!isNaN(id) && id >= 0 && id < originalBoxes.length && deletedOriginalIds.indexOf(id) === -1) {
+            deletedOriginalIds.push(id);
+          }
+        }
+      }
+      if (data && Array.isArray(data.added_boxes)) {
+        for (var j = 0; j < data.added_boxes.length; j++) {
+          var b = normalizeBox(data.added_boxes[j], 'user', -1);
+          if (b.x2 - b.x1 >= 1 && b.y2 - b.y1 >= 1) {
+            userAddedBoxes.push(b);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Invalid saved user corrections:', err);
+    }
   }
 
   function clearOverlays() {
@@ -351,26 +447,46 @@
     if (oldTooltip) oldTooltip.remove();
   }
 
+  function scheduleRenderBoxes() {
+    if (!document.getElementById('modal').classList.contains('active')) return;
+    window.requestAnimationFrame(function() {
+      renderBoxes();
+    });
+  }
+
+  function resetResizeObserver() {
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
+    if (window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(scheduleRenderBoxes);
+      resizeObserver.observe(document.getElementById('img-container'));
+      resizeObserver.observe(document.getElementById('modal-img'));
+    }
+  }
+
   function renderBoxes() {
     clearOverlays();
     var container = document.getElementById('img-container');
-    var img = document.getElementById('modal-img');
-    var scale = getScale();
+    var metrics = getImageMetrics();
+    var visibleBoxes = getVisibleBoxes();
 
     var tooltip = document.createElement('div');
     tooltip.className = 'box-tooltip';
     tooltip.style.display = 'none';
     container.appendChild(tooltip);
 
-    for (var i = 0; i < boxes.length; i++) {
-      var b = boxes[i];
-      var left = b.x1 * scale.scaleX;
-      var top = b.y1 * scale.scaleY;
-      var width = (b.x2 - b.x1) * scale.scaleX;
-      var height = (b.y2 - b.y1) * scale.scaleY;
+    for (var i = 0; i < visibleBoxes.length; i++) {
+      var b = visibleBoxes[i];
+      var left = metrics.offsetX + b.x1 * metrics.scaleX;
+      var top = metrics.offsetY + b.y1 * metrics.scaleY;
+      var width = (b.x2 - b.x1) * metrics.scaleX;
+      var height = (b.y2 - b.y1) * metrics.scaleY;
 
       var overlay = document.createElement('div');
       overlay.className = 'box-overlay';
+      if (b.source === 'user') overlay.classList.add('user-box');
       if (b.conf >= 0.6) overlay.classList.add('high');
       if (i === selectedBoxIndex) overlay.classList.add('selected');
       overlay.style.left = left + 'px';
@@ -390,13 +506,14 @@
         };
       })(i));
 
-      overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf) {
+      overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf, source) {
         return function(e) {
-          tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + (bconf * 100).toFixed(1) + '%';
+          var label = source === 'user' ? 'manual' : (bconf * 100).toFixed(1) + '%';
+          tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + label;
           tooltip.style.display = 'block';
           positionTooltip(e, tooltip);
         };
-      })(b.x1, b.y1, b.x2, b.y2, b.conf));
+      })(b.x1, b.y1, b.x2, b.y2, b.conf, b.source));
 
       overlay.addEventListener('mousemove', function(e) {
         tooltip.style.display = 'block';
@@ -414,16 +531,17 @@
   function updateBoxTable() {
     var tbody = document.getElementById('box-tbody');
     tbody.innerHTML = '';
-    if (boxes.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5">暂无识别框</td></tr>';
+    var visibleBoxes = getVisibleBoxes();
+    if (visibleBoxes.length === 0 && originalBoxes.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6">暂无识别框</td></tr>';
       document.getElementById('modal-count').textContent = '菌落数: 0';
       return;
     }
-    for (var i = 0; i < boxes.length; i++) {
-      var b = boxes[i];
+    for (var i = 0; i < visibleBoxes.length; i++) {
+      var b = visibleBoxes[i];
       var row = document.createElement('tr');
       if (i === selectedBoxIndex) row.classList.add('selected-row');
-      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : 'manual') + '</td>';
+      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : 'manual') + '</td><td>' + (b.source === 'user' ? 'Manual' : 'Auto') + '</td>';
       row.addEventListener('click', (function(idx) {
         return function() {
           selectedBoxIndex = (selectedBoxIndex === idx) ? -1 : idx;
@@ -433,7 +551,13 @@
       })(i));
       tbody.appendChild(row);
     }
-    document.getElementById('modal-count').textContent = '菌落数: ' + boxes.length;
+    if (originalBoxes.length > visibleBoxes.length) {
+      var deletedRow = document.createElement('tr');
+      deletedRow.className = 'deleted-row';
+      deletedRow.innerHTML = '<td colspan="6">已隐藏原始识别框: ' + deletedOriginalIds.length + ' 个（仅保存为用户修正，原始记录不变）</td>';
+      tbody.appendChild(deletedRow);
+    }
+    document.getElementById('modal-count').textContent = '菌落数: ' + visibleBoxes.length;
   }
 
   async function openModal(index) {
@@ -464,10 +588,13 @@
 
     editMode = false;
     selectedBoxIndex = -1;
-    boxes = [];
+    originalBoxes = [];
+    userAddedBoxes = [];
+    deletedOriginalIds = [];
     document.getElementById('edit-mode-btn').classList.remove('active');
     document.getElementById('edit-hint').classList.add('hidden');
     document.getElementById('delete-box-btn').classList.add('hidden');
+    document.getElementById('save-correction-btn').classList.add('hidden');
     document.getElementById('download-corrected-btn').classList.add('hidden');
 
     // AI panel
@@ -481,7 +608,7 @@
     }
 
     var tbody = document.getElementById('box-tbody');
-    tbody.innerHTML = '<tr><td colspan="5" class="table-loading-cell"><div class="spinner"></div> Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="table-loading-cell"><div class="spinner"></div> Loading...</td></tr>';
 
     clearOverlays();
 
@@ -502,7 +629,7 @@
         fetch(item.record.url)
           .then(function(r) { return r.text(); })
           .then(function(text) {
-            boxes = [];
+            originalBoxes = [];
             var raw = text.replace(/\r\n/g, '\n');
             var lines = raw.split('\n');
             for (var i = 0; i < lines.length; i++) {
@@ -516,17 +643,23 @@
               var y2 = parseFloat(parts[3]);
               var conf = parseFloat(parts[4]);
               if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2) || isNaN(conf)) continue;
-              boxes.push({x1: x1, y1: y1, x2: x2, y2: y2, conf: conf});
+              originalBoxes.push(normalizeBox({x1: x1, y1: y1, x2: x2, y2: y2, conf: conf}, 'auto', originalBoxes.length));
             }
+            applyUserCorrections(item.user_boxes);
             renderBoxes();
             updateBoxTable();
           })
           .catch(function(err) {
             console.error('Failed to fetch record:', err);
-            document.getElementById('box-tbody').innerHTML = '<tr><td colspan="5">无法加载识别数据</td></tr>';
+            document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">无法加载识别数据</td></tr>';
           });
       } else {
-        document.getElementById('box-tbody').innerHTML = '<tr><td colspan="5">识别数据不可用</td></tr>';
+        applyUserCorrections(item.user_boxes);
+        renderBoxes();
+        updateBoxTable();
+        if (getVisibleBoxes().length === 0) {
+          document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">识别数据不可用</td></tr>';
+        }
       }
     };
 
@@ -534,6 +667,7 @@
     img.onerror = null;
 
     document.getElementById('modal').classList.add('active');
+    resetResizeObserver();
 
     if (item.image && item.image.success && item.image.url) {
       document.getElementById('img-container').classList.add('image-loading');
@@ -544,7 +678,7 @@
         document.getElementById('img-container').classList.add('image-loading');
         imgLoader.classList.remove('loaded');
         imgLoader.innerHTML = 'Image failed to load';
-        document.getElementById('box-tbody').innerHTML = '<tr><td colspan="5">图片加载失败，无法显示识别数据</td></tr>';
+        document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">图片加载失败，无法显示识别数据</td></tr>';
       };
       img.src = item.image.url;
       if (img.complete && img.naturalWidth > 0) {
@@ -566,17 +700,20 @@
     var hint = document.getElementById('edit-hint');
     var delBtn = document.getElementById('delete-box-btn');
     var dlBtn = document.getElementById('download-corrected-btn');
+    var saveBtn = document.getElementById('save-correction-btn');
 
     if (editMode) {
       btn.classList.add('active');
       hint.classList.remove('hidden');
       delBtn.classList.remove('hidden');
+      saveBtn.classList.remove('hidden');
       dlBtn.classList.remove('hidden');
       enableDrawing();
     } else {
       btn.classList.remove('active');
       hint.classList.add('hidden');
       delBtn.classList.add('hidden');
+      saveBtn.classList.add('hidden');
       selectedBoxIndex = -1;
       renderBoxes();
       updateBoxTable();
@@ -586,34 +723,73 @@
 
   function enableDrawing() {
     var container = document.getElementById('img-container');
+    var img = document.getElementById('modal-img');
     container.style.cursor = 'crosshair';
-    container.addEventListener('mousedown', onDrawStart);
-    container.addEventListener('mousemove', onDrawMove);
-    container.addEventListener('mouseup', onDrawEnd);
+    container.classList.add('editing');
+    img.draggable = false;
+    img.addEventListener('dragstart', preventDefaultDrag);
+    container.addEventListener('pointerdown', onDrawStart);
+    container.addEventListener('pointermove', onDrawMove);
+    container.addEventListener('pointerup', onDrawEnd);
+    container.addEventListener('pointercancel', cancelDrawing);
     document.addEventListener('keydown', onKeyDown);
   }
 
   function disableDrawing() {
     var container = document.getElementById('img-container');
+    var img = document.getElementById('modal-img');
     container.style.cursor = '';
-    container.removeEventListener('mousedown', onDrawStart);
-    container.removeEventListener('mousemove', onDrawMove);
-    container.removeEventListener('mouseup', onDrawEnd);
+    container.classList.remove('editing');
+    img.removeEventListener('dragstart', preventDefaultDrag);
+    container.removeEventListener('pointerdown', onDrawStart);
+    container.removeEventListener('pointermove', onDrawMove);
+    container.removeEventListener('pointerup', onDrawEnd);
+    container.removeEventListener('pointercancel', cancelDrawing);
     document.removeEventListener('keydown', onKeyDown);
     if (drawOverlay) { drawOverlay.remove(); drawOverlay = null; }
     isDrawing = false;
   }
 
+  function preventDefaultDrag(e) {
+    e.preventDefault();
+  }
+
+  function clampPointToImage(clientX, clientY) {
+    var container = document.getElementById('img-container');
+    var rect = container.getBoundingClientRect();
+    var metrics = getImageMetrics();
+    var x = clientX - rect.left;
+    var y = clientY - rect.top;
+    return {
+      x: Math.max(metrics.offsetX, Math.min(metrics.offsetX + metrics.displayW, x)),
+      y: Math.max(metrics.offsetY, Math.min(metrics.offsetY + metrics.displayH, y))
+    };
+  }
+
+  function isPointInsideImage(clientX, clientY) {
+    var container = document.getElementById('img-container');
+    var rect = container.getBoundingClientRect();
+    var metrics = getImageMetrics();
+    var x = clientX - rect.left;
+    var y = clientY - rect.top;
+    return x >= metrics.offsetX && x <= metrics.offsetX + metrics.displayW &&
+      y >= metrics.offsetY && y <= metrics.offsetY + metrics.displayH;
+  }
+
   function onDrawStart(e) {
     if (!editMode) return;
     if (e.target.classList.contains('box-overlay')) return;
+    e.preventDefault();
     var container = document.getElementById('img-container');
-    var rect = container.getBoundingClientRect();
+    var img = document.getElementById('modal-img');
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    if (!isPointInsideImage(e.clientX, e.clientY)) return;
+    var point = clampPointToImage(e.clientX, e.clientY);
     isDrawing = true;
-    drawStart = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
+    drawStart = point;
+    if (container.setPointerCapture) {
+      container.setPointerCapture(e.pointerId);
+    }
     drawOverlay = document.createElement('div');
     drawOverlay.className = 'box-overlay drawing';
     drawOverlay.style.left = drawStart.x + 'px';
@@ -625,10 +801,10 @@
 
   function onDrawMove(e) {
     if (!isDrawing || !drawOverlay) return;
-    var container = document.getElementById('img-container');
-    var rect = container.getBoundingClientRect();
-    var curX = e.clientX - rect.left;
-    var curY = e.clientY - rect.top;
+    e.preventDefault();
+    var cur = clampPointToImage(e.clientX, e.clientY);
+    var curX = cur.x;
+    var curY = cur.y;
     var left = Math.min(drawStart.x, curX);
     var top = Math.min(drawStart.y, curY);
     var width = Math.abs(curX - drawStart.x);
@@ -641,10 +817,13 @@
 
   function onDrawEnd(e) {
     if (!isDrawing || !drawOverlay) return;
+    e.preventDefault();
     isDrawing = false;
     var container = document.getElementById('img-container');
-    var img = document.getElementById('modal-img');
-    var scale = getScale();
+    if (container.hasPointerCapture && container.hasPointerCapture(e.pointerId)) {
+      container.releasePointerCapture(e.pointerId);
+    }
+    var metrics = getImageMetrics();
 
     var left = parseFloat(drawOverlay.style.left);
     var top = parseFloat(drawOverlay.style.top);
@@ -656,21 +835,27 @@
 
     if (width < 5 || height < 5) return;
 
-    var x1 = left / scale.scaleX;
-    var y1 = top / scale.scaleY;
-    var x2 = (left + width) / scale.scaleX;
-    var y2 = (top + height) / scale.scaleY;
+    var x1 = (left - metrics.offsetX) / metrics.scaleX;
+    var y1 = (top - metrics.offsetY) / metrics.scaleY;
+    var x2 = (left + width - metrics.offsetX) / metrics.scaleX;
+    var y2 = (top + height - metrics.offsetY) / metrics.scaleY;
 
-    boxes.push({x1: x1, y1: y1, x2: x2, y2: y2, conf: -1});
-    selectedBoxIndex = boxes.length - 1;
+    userAddedBoxes.push(normalizeBox({x1: x1, y1: y1, x2: x2, y2: y2, conf: -1}, 'user', -1));
+    selectedBoxIndex = getVisibleBoxes().length - 1;
     renderBoxes();
     updateBoxTable();
+  }
+
+  function cancelDrawing(e) {
+    if (e) e.preventDefault();
+    if (drawOverlay) { drawOverlay.remove(); drawOverlay = null; }
+    isDrawing = false;
   }
 
   function onKeyDown(e) {
     if (!editMode) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (selectedBoxIndex >= 0 && selectedBoxIndex < boxes.length) {
+      if (selectedBoxIndex >= 0 && selectedBoxIndex < getVisibleBoxes().length) {
         e.preventDefault();
         deleteSelectedBox();
       }
@@ -678,18 +863,25 @@
   }
 
   function deleteSelectedBox() {
-    if (selectedBoxIndex < 0 || selectedBoxIndex >= boxes.length) return;
-    boxes.splice(selectedBoxIndex, 1);
+    var visibleBoxes = getVisibleBoxes();
+    if (selectedBoxIndex < 0 || selectedBoxIndex >= visibleBoxes.length) return;
+    var selected = visibleBoxes[selectedBoxIndex];
+    if (selected.source === 'user') {
+      userAddedBoxes.splice(selected.userIndex, 1);
+    } else if (selected.source === 'auto' && deletedOriginalIds.indexOf(selected.originalIndex) === -1) {
+      deletedOriginalIds.push(selected.originalIndex);
+    }
     selectedBoxIndex = -1;
     renderBoxes();
     updateBoxTable();
   }
 
   function downloadCorrectedRecord() {
-    if (boxes.length === 0) return;
+    var visibleBoxes = getVisibleBoxes();
+    if (visibleBoxes.length === 0) return;
     var lines = [];
-    for (var i = 0; i < boxes.length; i++) {
-      var b = boxes[i];
+    for (var i = 0; i < visibleBoxes.length; i++) {
+      var b = visibleBoxes[i];
       var conf = b.conf >= 0 ? b.conf : 0;
       lines.push(b.x1.toFixed(1) + ' ' + b.y1.toFixed(1) + ' ' + b.x2.toFixed(1) + ' ' + b.y2.toFixed(1) + ' ' + conf.toFixed(2));
     }
@@ -703,6 +895,41 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  async function saveCorrections() {
+    if (currentModalIndex < 0) return;
+    var item = currentData[currentModalIndex];
+    var btn = document.getElementById('save-correction-btn');
+    var previousHtml = btn.innerHTML;
+    var correction = serializeUserCorrections();
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      var resp = await fetch('/api/colony/correction', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          uuid: document.getElementById('uuid').value.trim(),
+          plateid: parseInt(currentPlateID, 10),
+          timestamp: formatStoredTimestamp(item.timestamp),
+          user_boxes: correction
+        })
+      });
+      var data = await resp.json();
+      if (!data.success) {
+        showError(data.message || '保存用户修正失败');
+        return;
+      }
+      item.user_boxes = JSON.stringify(correction);
+      showInfo('用户修正已保存，原始识别数据未被修改');
+    } catch (err) {
+      showError('保存用户修正失败: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = previousHtml;
+    }
   }
 
   async function runAnalyze() {
@@ -767,6 +994,10 @@
 
   function closeModal() {
     document.getElementById('modal').classList.remove('active');
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
     if (editMode) {
       editMode = false;
       disableDrawing();
@@ -780,6 +1011,8 @@
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeModal();
   });
+
+  window.addEventListener('resize', scheduleRenderBoxes);
 
   window.addEventListener('DOMContentLoaded', initTimeDefaults);
 </script>
