@@ -128,6 +128,18 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           删除所选
         </button>
+        <button class="btn-secondary hidden" id="show-deleted-btn" onclick="showDeletedOriginalBoxes()" title="恢复并显示所有被隐藏的原始框">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span id="show-deleted-label">显示已删除</span>
+        </button>
+        <button class="btn-secondary hidden" id="undo-btn" onclick="undoCorrectionEdit()" title="撤销上一步 Ctrl+Z">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
+          撤销
+        </button>
+        <button class="btn-secondary hidden" id="redo-btn" onclick="redoCorrectionEdit()" title="重做上一步 Ctrl+Y">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/></svg>
+          重做
+        </button>
         <button class="btn-secondary hidden" id="save-correction-btn" onclick="saveCorrections()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           保存修正
@@ -143,7 +155,7 @@
       </div>
       <div class="edit-hint hidden" id="edit-hint">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        在图片内拖动以绘制新的用户框。点击框以选中，然后按 Delete 键。删除自动框仅在用户修正中标记为隐藏，原始记录数据不会被修改。
+        在图片内拖动以绘制新的用户框。点击框以选中，然后按 Delete 键。删除自动框仅在用户修正中标记为隐藏；点击“显示已删除”可一次恢复所有隐藏的原始框。支持 Ctrl+Z 撤销、Ctrl+Y 或 Ctrl+Shift+Z 重做。
       </div>
       <div class="img-container" id="img-container">
         <div class="modal-img-loader" id="modal-img-loader">
@@ -155,7 +167,7 @@
       <div class="modal-footer">
         <div class="box-list" id="box-list">
           <table>
-            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>置信度</th><th>来源</th><th>操作</th></tr></thead>
+            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>置信度</th><th>来源</th></tr></thead>
             <tbody id="box-tbody"></tbody>
           </table>
         </div>
@@ -205,6 +217,8 @@
   var resizeObserver = null;
   var boxCoordinateFrame = {width: 0, height: 0};
   var MANUAL_BOX_CONFIDENCE = -1;
+  var undoStack = [];
+  var redoStack = [];
 
   async function doQuery(startMicro, endMicro) {
     var uuid = document.getElementById('uuid').value.trim();
@@ -501,31 +515,93 @@
     };
   }
 
+  function cloneUserBoxes(boxes) {
+    return boxes.map(function(b) {
+      return {x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, conf: b.conf};
+    });
+  }
+
+  function snapshotEditState() {
+    return {
+      userAddedBoxes: cloneUserBoxes(userAddedBoxes),
+      deletedOriginalIds: deletedOriginalIds.slice()
+    };
+  }
+
+  function applyEditState(state) {
+    userAddedBoxes = cloneUserBoxes(state.userAddedBoxes || []);
+    deletedOriginalIds = (state.deletedOriginalIds || []).slice();
+    selectedBoxIndex = -1;
+    renderBoxes();
+    updateBoxTable();
+    updateEditButtons();
+  }
+
+  function recordEditState() {
+    undoStack.push(snapshotEditState());
+    if (undoStack.length > 100) undoStack.shift();
+    redoStack = [];
+    updateEditButtons();
+  }
+
+  function resetEditHistory() {
+    undoStack = [];
+    redoStack = [];
+    updateEditButtons();
+  }
+
+  function undoCorrectionEdit() {
+    if (undoStack.length === 0) return;
+    redoStack.push(snapshotEditState());
+    applyEditState(undoStack.pop());
+  }
+
+  function redoCorrectionEdit() {
+    if (redoStack.length === 0) return;
+    undoStack.push(snapshotEditState());
+    applyEditState(redoStack.pop());
+  }
+
+  function updateEditButtons() {
+    var undoBtn = document.getElementById('undo-btn');
+    var redoBtn = document.getElementById('redo-btn');
+    var showDeletedBtn = document.getElementById('show-deleted-btn');
+    if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+    if (showDeletedBtn) {
+      showDeletedBtn.disabled = deletedOriginalIds.length === 0;
+      var label = document.getElementById('show-deleted-label');
+      if (label) label.textContent = deletedOriginalIds.length > 0 ? '显示已删除(' + deletedOriginalIds.length + ')' : '显示已删除';
+    }
+  }
+
   function applyUserCorrections(raw) {
     userAddedBoxes = [];
     deletedOriginalIds = [];
-    if (!raw) return;
-    try {
-      var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (data && Array.isArray(data.deleted_original_ids)) {
-        for (var i = 0; i < data.deleted_original_ids.length; i++) {
-          var id = parseInt(data.deleted_original_ids[i], 10);
-          if (!isNaN(id) && id >= 0 && id < originalBoxes.length && deletedOriginalIds.indexOf(id) === -1) {
-            deletedOriginalIds.push(id);
+    if (raw) {
+      try {
+        var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (data && Array.isArray(data.deleted_original_ids)) {
+          for (var i = 0; i < data.deleted_original_ids.length; i++) {
+            var id = parseInt(data.deleted_original_ids[i], 10);
+            if (!isNaN(id) && id >= 0 && id < originalBoxes.length && deletedOriginalIds.indexOf(id) === -1) {
+              deletedOriginalIds.push(id);
+            }
           }
         }
-      }
-      if (data && Array.isArray(data.added_boxes)) {
-        for (var j = 0; j < data.added_boxes.length; j++) {
-          var b = normalizeBox(normalizeSavedUserBox(data.added_boxes[j]), 'user', -1);
-          if (b.x2 - b.x1 >= 1 && b.y2 - b.y1 >= 1) {
-            userAddedBoxes.push(b);
+        if (data && Array.isArray(data.added_boxes)) {
+          for (var j = 0; j < data.added_boxes.length; j++) {
+            var b = normalizeBox(normalizeSavedUserBox(data.added_boxes[j]), 'user', -1);
+            if (b.x2 - b.x1 >= 1 && b.y2 - b.y1 >= 1) {
+              userAddedBoxes.push(b);
+            }
           }
         }
+      } catch (err) {
+        console.warn('Invalid saved user corrections:', err);
       }
-    } catch (err) {
-      console.warn('Invalid saved user corrections:', err);
     }
+    resetEditHistory();
   }
 
   function clearOverlays() {
@@ -624,15 +700,16 @@
     tbody.innerHTML = '';
     var visibleBoxes = getVisibleBoxes();
     if (visibleBoxes.length === 0 && originalBoxes.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7">暂无识别框</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6">暂无识别框</td></tr>';
       document.getElementById('modal-count').textContent = '菌落数: 0';
+      updateEditButtons();
       return;
     }
     for (var i = 0; i < visibleBoxes.length; i++) {
       var b = visibleBoxes[i];
       var row = document.createElement('tr');
       if (i === selectedBoxIndex) row.classList.add('selected-row');
-      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : '手动') + '</td><td>' + (b.source === 'user' ? '手动' : '自动') + '</td><td></td>';
+      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : '手动') + '</td><td>' + (b.source === 'user' ? '手动' : '自动') + '</td>';
       row.addEventListener('click', (function(idx) {
         return function() {
           selectedBoxIndex = (selectedBoxIndex === idx) ? -1 : idx;
@@ -642,28 +719,20 @@
       })(i));
       tbody.appendChild(row);
     }
-    for (var j = 0; j < deletedOriginalIds.length; j++) {
-      var originalIndex = deletedOriginalIds[j];
-      var hidden = originalBoxes[originalIndex];
-      if (!hidden) continue;
+    if (deletedOriginalIds.length > 0) {
       var deletedRow = document.createElement('tr');
       deletedRow.className = 'deleted-row';
-      deletedRow.innerHTML = '<td>' + hidden.x1.toFixed(1) + '</td><td>' + hidden.y1.toFixed(1) + '</td><td>' + hidden.x2.toFixed(1) + '</td><td>' + hidden.y2.toFixed(1) + '</td><td>' + (hidden.conf >= 0 ? (hidden.conf * 100).toFixed(1) + '%' : '-') + '</td><td>已隐藏</td><td><button type="button" class="table-action-btn" data-original-index="' + originalIndex + '">恢复</button></td>';
-      deletedRow.querySelector('button').addEventListener('click', (function(id) {
-        return function(e) {
-          e.stopPropagation();
-          restoreOriginalBox(id);
-        };
-      })(originalIndex));
+      deletedRow.innerHTML = '<td colspan="6">已隐藏原始识别框: ' + deletedOriginalIds.length + ' 个。点击上方“显示已删除”可一次恢复。</td>';
       tbody.appendChild(deletedRow);
     }
     document.getElementById('modal-count').textContent = '菌落数: ' + visibleBoxes.length;
+    updateEditButtons();
   }
 
-  function restoreOriginalBox(originalIndex) {
-    var pos = deletedOriginalIds.indexOf(originalIndex);
-    if (pos === -1) return;
-    deletedOriginalIds.splice(pos, 1);
+  function showDeletedOriginalBoxes() {
+    if (deletedOriginalIds.length === 0) return;
+    recordEditState();
+    deletedOriginalIds = [];
     selectedBoxIndex = -1;
     renderBoxes();
     updateBoxTable();
@@ -704,9 +773,13 @@
     document.getElementById('edit-mode-btn').classList.remove('active');
     document.getElementById('edit-hint').classList.add('hidden');
     document.getElementById('delete-box-btn').classList.add('hidden');
+    document.getElementById('show-deleted-btn').classList.add('hidden');
+    document.getElementById('undo-btn').classList.add('hidden');
+    document.getElementById('redo-btn').classList.add('hidden');
     document.getElementById('save-correction-btn').classList.add('hidden');
     document.getElementById('clear-correction-btn').classList.add('hidden');
     document.getElementById('download-corrected-btn').classList.add('hidden');
+    resetEditHistory();
 
     // AI panel
     var aiBody = document.getElementById('ai-panel-body');
@@ -719,7 +792,7 @@
     }
 
     var tbody = document.getElementById('box-tbody');
-    tbody.innerHTML = '<tr><td colspan="7" class="table-loading-cell"><div class="spinner"></div> 加载中...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="table-loading-cell"><div class="spinner"></div> 加载中...</td></tr>';
 
     clearOverlays();
 
@@ -772,7 +845,7 @@
           })
           .catch(function(err) {
             console.error('Failed to fetch record:', err);
-            document.getElementById('box-tbody').innerHTML = '<tr><td colspan="7">无法加载识别数据</td></tr>';
+            document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">无法加载识别数据</td></tr>';
           });
       } else {
         updateBoxCoordinateFrame([]);
@@ -780,7 +853,7 @@
         renderBoxes();
         updateBoxTable();
         if (getVisibleBoxes().length === 0) {
-          document.getElementById('box-tbody').innerHTML = '<tr><td colspan="7">识别数据不可用</td></tr>';
+          document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">识别数据不可用</td></tr>';
         }
       }
     };
@@ -800,7 +873,7 @@
         document.getElementById('img-container').classList.add('image-loading');
         imgLoader.classList.remove('loaded');
         imgLoader.innerHTML = '图片加载失败';
-        document.getElementById('box-tbody').innerHTML = '<tr><td colspan="7">图片加载失败，无法显示识别数据</td></tr>';
+        document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">图片加载失败，无法显示识别数据</td></tr>';
       };
       img.src = item.image.url;
       if (img.complete && img.naturalWidth > 0) {
@@ -821,6 +894,9 @@
     var btn = document.getElementById('edit-mode-btn');
     var hint = document.getElementById('edit-hint');
     var delBtn = document.getElementById('delete-box-btn');
+    var showDeletedBtn = document.getElementById('show-deleted-btn');
+    var undoBtn = document.getElementById('undo-btn');
+    var redoBtn = document.getElementById('redo-btn');
     var dlBtn = document.getElementById('download-corrected-btn');
     var saveBtn = document.getElementById('save-correction-btn');
     var clearBtn = document.getElementById('clear-correction-btn');
@@ -829,16 +905,24 @@
       btn.classList.add('active');
       hint.classList.remove('hidden');
       delBtn.classList.remove('hidden');
+      showDeletedBtn.classList.remove('hidden');
+      undoBtn.classList.remove('hidden');
+      redoBtn.classList.remove('hidden');
       saveBtn.classList.remove('hidden');
       clearBtn.classList.remove('hidden');
       dlBtn.classList.remove('hidden');
       enableDrawing();
+      updateEditButtons();
     } else {
       btn.classList.remove('active');
       hint.classList.add('hidden');
       delBtn.classList.add('hidden');
+      showDeletedBtn.classList.add('hidden');
+      undoBtn.classList.add('hidden');
+      redoBtn.classList.add('hidden');
       saveBtn.classList.add('hidden');
       clearBtn.classList.add('hidden');
+      dlBtn.classList.add('hidden');
       selectedBoxIndex = -1;
       renderBoxes();
       updateBoxTable();
@@ -965,6 +1049,7 @@
     var x2 = displayToBoxX(left + width, metrics);
     var y2 = displayToBoxY(top + height, metrics);
 
+    recordEditState();
     userAddedBoxes.push(normalizeBox({x1: x1, y1: y1, x2: x2, y2: y2, conf: MANUAL_BOX_CONFIDENCE}, 'user', -1));
     selectedBoxIndex = getVisibleBoxes().length - 1;
     renderBoxes();
@@ -979,6 +1064,20 @@
 
   function onKeyDown(e) {
     if (!editMode) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        redoCorrectionEdit();
+      } else {
+        undoCorrectionEdit();
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      redoCorrectionEdit();
+      return;
+    }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (selectedBoxIndex >= 0 && selectedBoxIndex < getVisibleBoxes().length) {
         e.preventDefault();
@@ -991,6 +1090,7 @@
     var visibleBoxes = getVisibleBoxes();
     if (selectedBoxIndex < 0 || selectedBoxIndex >= visibleBoxes.length) return;
     var selected = visibleBoxes[selectedBoxIndex];
+    recordEditState();
     if (selected.source === 'user') {
       userAddedBoxes.splice(selected.userIndex, 1);
     } else if (selected.source === 'auto' && deletedOriginalIds.indexOf(selected.originalIndex) === -1) {
@@ -1054,6 +1154,7 @@
     var previousDeletedIds = deletedOriginalIds.slice();
     var correction;
 
+    recordEditState();
     userAddedBoxes = [];
     deletedOriginalIds = [];
     selectedBoxIndex = -1;
@@ -1070,6 +1171,8 @@
     } catch (err) {
       userAddedBoxes = previousUserBoxes;
       deletedOriginalIds = previousDeletedIds;
+      if (undoStack.length > 0) undoStack.pop();
+      redoStack = [];
       renderBoxes();
       updateBoxTable();
       showError('清空用户修正失败: ' + err.message);

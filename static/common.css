@@ -1199,22 +1199,6 @@ select.form-input,
   background: var(--bg);
 }
 
-.table-action-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--primary);
-  font-size: 12px;
-  font-style: normal;
-  cursor: pointer;
-}
-
-.table-action-btn:hover {
-  border-color: var(--primary);
-  background: var(--primary-50);
-}
-
 /* ---- AI Panel ---- */
 .ai-panel {
   margin-top: 20px;
