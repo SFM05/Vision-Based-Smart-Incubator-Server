@@ -80,8 +80,25 @@ function hideInfo() {
 function setDeviceStatus(message, isError) {
   var el = document.getElementById('device-status');
   if (!el) return;
-  el.textContent = message || '';
+  el.innerHTML = '';
+  el.appendChild(document.createTextNode(message || ''));
   el.classList.toggle('error', !!isError);
+}
+
+function setDeviceStatusWithManualAction(message, isError) {
+  setDeviceStatus(message + ' ', isError);
+  var el = document.getElementById('device-status');
+  var uuidEl = document.getElementById('uuid');
+  if (!el || !uuidEl || uuidEl.tagName !== 'SELECT') return;
+
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'selector-manual-btn';
+  button.textContent = '手动输入';
+  button.addEventListener('click', function() {
+    enableManualDeviceFallback('已选择手动输入');
+  });
+  el.appendChild(button);
 }
 
 function resetSelect(select, message) {
@@ -144,7 +161,7 @@ async function readJSONResponse(resp) {
 
 function populatePlateSelect(devicesByUUID, uuid) {
   var plateSelect = document.getElementById('plateid');
-  if (!plateSelect) return;
+  if (!plateSelect || plateSelect.tagName !== 'SELECT') return;
 
   var savedPlate = localStorage.getItem('incubator_plateid') || '';
   var device = devicesByUUID[uuid];
@@ -181,6 +198,7 @@ async function initDeviceSelectors() {
     resetSelect(plateSelect, '请先选择设备');
     plateSelect.disabled = true;
   }
+  setDeviceStatusWithManualAction('正在从阿里云 Tablestore 获取设备列表。', false);
 
   try {
     var resp = await fetch('/api/devices');
@@ -189,14 +207,17 @@ async function initDeviceSelectors() {
       throw new Error(data.message || '设备列表加载失败');
     }
 
+    uuidSelect = document.getElementById('uuid');
+    if (!uuidSelect || uuidSelect.tagName !== 'SELECT') return;
+    plateSelect = document.getElementById('plateid');
+
     var allDevices = data.devices || [];
     var devices = plateSelect ? allDevices.filter(function(device) {
       return device.plates && device.plates.length > 0;
     }) : allDevices;
 
     if (devices.length === 0) {
-      resetSelect(uuidSelect, plateSelect ? '暂无带盘位的设备' : '暂无设备');
-      setDeviceStatus('未发现可选设备，请确认 Tablestore 中已有数据。', true);
+      enableManualDeviceFallback('未发现可选设备，请确认 Tablestore 中已有数据。');
       return;
     }
 
@@ -237,7 +258,7 @@ async function initDeviceSelectors() {
       }
     });
 
-    setDeviceStatus('设备列表已加载。', false);
+    setDeviceStatusWithManualAction('设备列表已加载。', false);
   } catch (err) {
     enableManualDeviceFallback('设备列表加载失败：' + err.message);
   }

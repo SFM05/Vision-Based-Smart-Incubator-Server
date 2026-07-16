@@ -316,6 +316,20 @@ select.form-input,
   color: var(--error);
 }
 
+.selector-manual-btn {
+  border: none;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.selector-manual-btn:hover {
+  text-decoration: underline;
+}
+
 /* ---- Query Row (quick buttons + time fields) ---- */
 .query-row {
   display: flex;
