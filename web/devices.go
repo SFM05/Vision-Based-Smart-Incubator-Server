@@ -6,6 +6,8 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
 )
@@ -20,6 +22,14 @@ type DevicesResponse struct {
 	Message string           `json:"message,omitempty"`
 	Devices []DeviceMetaData `json:"devices,omitempty"`
 }
+
+var devicesCache = struct {
+	sync.Mutex
+	response  DevicesResponse
+	expiresAt time.Time
+}{}
+
+const devicesCacheTTL = 60 * time.Second
 
 func queryTimeseriesMetas(client *tablestore.TimeseriesClient, tableName string, measurementName string) ([]*tablestore.TimeseriesMeta, error) {
 	if tableName == "" || measurementName == "" {
@@ -50,12 +60,15 @@ func queryTimeseriesMetas(client *tablestore.TimeseriesClient, tableName string,
 
 // GetDevices 获取已写入时序表的设备 UUID 和菌落盘位号。
 func GetDevices() DevicesResponse {
-	instanceName := os.Getenv("TABLE_INSTANCE_NAME")
-	endpoint := os.Getenv("TABLE_ENDPOINT")
-	accessKeyId := os.Getenv("TABLESTORE_ACCESS_KEY_ID")
-	accessKeySecret := os.Getenv("TABLESTORE_ACCESS_KEY_SECRET")
+	devicesCache.Lock()
+	if time.Now().Before(devicesCache.expiresAt) {
+		cached := devicesCache.response
+		devicesCache.Unlock()
+		return cached
+	}
+	devicesCache.Unlock()
 
-	client := tablestore.NewTimeseriesClient(endpoint, instanceName, accessKeyId, accessKeySecret)
+	client := getTimeseriesClient()
 
 	devicePlates := map[string]map[int]bool{}
 	ensureDevice := func(uuid string) {
@@ -119,6 +132,11 @@ func GetDevices() DevicesResponse {
 		sort.Ints(plates)
 		response.Devices = append(response.Devices, DeviceMetaData{UUID: uuid, Plates: plates})
 	}
+
+	devicesCache.Lock()
+	devicesCache.response = response
+	devicesCache.expiresAt = time.Now().Add(devicesCacheTTL)
+	devicesCache.Unlock()
 
 	return response
 }

@@ -35,12 +35,7 @@ func safeFloat64(fields map[string]*tablestore.ColumnValue, key string) (float64
 
 // GetEnv 获取网页需要的温湿度数据
 func GetEnv(uuid string, start time.Time, end time.Time) string {
-	instanceName := os.Getenv("TABLE_INSTANCE_NAME")
-	endpoint := os.Getenv("TABLE_ENDPOINT")
-	accessKeyId := os.Getenv("TABLESTORE_ACCESS_KEY_ID")
-	accessKeySecret := os.Getenv("TABLESTORE_ACCESS_KEY_SECRET")
-
-	client := tablestore.NewTimeseriesClient(endpoint, instanceName, accessKeyId, accessKeySecret)
+	client := getTimeseriesClient()
 
 	table_name := os.Getenv("ENV_TABLE_NAME")
 	measurement_name := os.Getenv("ENV_MEASURE_NAME")

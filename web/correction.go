@@ -30,11 +30,7 @@ func SaveColonyCorrection(uuid string, plateid int, timestamp string, userBoxes 
 	}
 	truncatedUs := ts.UnixMicro() / 1e6 * 1e6
 
-	instanceName := os.Getenv("TABLE_INSTANCE_NAME")
-	endpoint := os.Getenv("TABLE_ENDPOINT")
-	accessKeyId := os.Getenv("TABLESTORE_ACCESS_KEY_ID")
-	accessKeySecret := os.Getenv("TABLESTORE_ACCESS_KEY_SECRET")
-	client := tablestore.NewTimeseriesClient(endpoint, instanceName, accessKeyId, accessKeySecret)
+	client := getTimeseriesClient()
 	tableName := os.Getenv("COLONY_TABLE_NAME")
 	measurementName := os.Getenv("COLONY_MEASURE_NAME")
 

@@ -8,10 +8,10 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
 )
 
@@ -35,29 +35,15 @@ type ColonyResponse struct {
 }
 
 func getFileMetaData(object_name string, expire_time time.Duration) FileMetaData {
-	region := os.Getenv("REGION")
 	bucket_name := os.Getenv("BUCKET_NAME")
-
-	cfg := oss.LoadDefaultConfig().
-		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
-		WithRegion(region)
-
-	client := oss.NewClient(cfg)
-
 	data := FileMetaData{}
-	existed, err := client.IsObjectExist(context.TODO(), bucket_name, object_name)
-	if err != nil {
+	if object_name == "" {
 		data.Success = false
-		data.Message = err.Error()
-		return data
-	}
-	if !existed {
-		data.Success = false
-		data.Message = "Not existed."
+		data.Message = "empty object name"
 		return data
 	}
 
-	result, err := client.Presign(context.TODO(), &oss.GetObjectRequest{
+	result, err := getOSSClient().Presign(context.TODO(), &oss.GetObjectRequest{
 		Bucket: oss.Ptr(bucket_name),
 		Key:    oss.Ptr(object_name),
 	},
@@ -98,12 +84,7 @@ func safeInt64(fields map[string]*tablestore.ColumnValue, key string) (int64, bo
 }
 
 func GetColony(uuid string, plateid int, start time.Time, end time.Time) string {
-	instanceName := os.Getenv("TABLE_INSTANCE_NAME")
-	endpoint := os.Getenv("TABLE_ENDPOINT")
-	accessKeyId := os.Getenv("TABLESTORE_ACCESS_KEY_ID")
-	accessKeySecret := os.Getenv("TABLESTORE_ACCESS_KEY_SECRET")
-
-	client := tablestore.NewTimeseriesClient(endpoint, instanceName, accessKeyId, accessKeySecret)
+	client := getTimeseriesClient()
 
 	table_name := os.Getenv("COLONY_TABLE_NAME")
 	measurement_name := os.Getenv("COLONY_MEASURE_NAME")
@@ -132,6 +113,8 @@ func GetColony(uuid string, plateid int, start time.Time, end time.Time) string 
 	response := ColonyResponse{
 		Sucess: true,
 	}
+	imagePaths := []string{}
+	recordPaths := []string{}
 
 	for i := 0; i < len(getTimeseriesResp.GetRows()); i++ {
 		timestamp := time.UnixMicro(getTimeseriesResp.GetRows()[i].GetTimeInus())
@@ -148,20 +131,33 @@ func GetColony(uuid string, plateid int, start time.Time, end time.Time) string 
 		reply, _ := safeString(rows, "reply")
 		userBoxes, _ := safeString(rows, "user_boxes")
 
-		image := getFileMetaData(image_path, 10*time.Minute)
-		record := getFileMetaData(record_path, 10*time.Minute)
-
 		data := ColonyMetaData{
 			Timestamp: timestamp.UTC().Format(time.RFC3339),
 			Number:    number,
-			Image:     image,
-			Record:    record,
 			Reply:     reply,
 			UserBoxes: userBoxes,
 		}
 
 		response.ColonyData = append(response.ColonyData, data)
+		imagePaths = append(imagePaths, image_path)
+		recordPaths = append(recordPaths, record_path)
 	}
+
+	var wg sync.WaitGroup
+	limit := make(chan struct{}, 8)
+	for i := range response.ColonyData {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			limit <- struct{}{}
+			defer func() { <-limit }()
+
+			response.ColonyData[i].Image = getFileMetaData(imagePaths[i], 10*time.Minute)
+			response.ColonyData[i].Record = getFileMetaData(recordPaths[i], 10*time.Minute)
+		}()
+	}
+	wg.Wait()
 
 	json_data := &bytes.Buffer{}
 	encoder := json.NewEncoder(json_data)

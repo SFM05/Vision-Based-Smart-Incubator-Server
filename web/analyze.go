@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
 )
 
@@ -24,16 +23,9 @@ type AnalyzeResponse struct {
 }
 
 func signDownloadURL(objectName string, expireTime time.Duration) (string, error) {
-	region := os.Getenv("REGION")
 	bucketName := os.Getenv("BUCKET_NAME")
 
-	cfg := oss.LoadDefaultConfig().
-		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
-		WithRegion(region)
-
-	client := oss.NewClient(cfg)
-
-	result, err := client.Presign(context.TODO(), &oss.GetObjectRequest{
+	result, err := getOSSClient().Presign(context.TODO(), &oss.GetObjectRequest{
 		Bucket: oss.Ptr(bucketName),
 		Key:    oss.Ptr(objectName),
 	},
@@ -184,11 +176,7 @@ func AnalyzeColony(uuid string, plateid int, timestamp string) AnalyzeResponse {
 
 	truncatedUs := ts.UnixMicro() / 1e6 * 1e6
 
-	instanceName := os.Getenv("TABLE_INSTANCE_NAME")
-	endpoint := os.Getenv("TABLE_ENDPOINT")
-	accessKeyId := os.Getenv("TABLESTORE_ACCESS_KEY_ID")
-	accessKeySecret := os.Getenv("TABLESTORE_ACCESS_KEY_SECRET")
-	client := tablestore.NewTimeseriesClient(endpoint, instanceName, accessKeyId, accessKeySecret)
+	client := getTimeseriesClient()
 	tableName := os.Getenv("COLONY_TABLE_NAME")
 	measurementName := os.Getenv("COLONY_MEASURE_NAME")
 

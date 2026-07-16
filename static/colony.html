@@ -303,6 +303,8 @@
       var img = document.createElement('img');
       img.className = 'card-thumb';
       img.alt = timeStr;
+      img.loading = 'lazy';
+      img.decoding = 'async';
       thumbWrap.appendChild(img);
       card.appendChild(thumbWrap);
 

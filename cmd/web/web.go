@@ -65,6 +65,9 @@ func main() {
 }
 
 func handleDevicesQuery(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	defer func() { log.Printf("%s completed in %s", r.URL.Path, time.Since(started)) }()
+
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"success":false,"message":"method not allowed"}`, http.StatusMethodNotAllowed)
 		return
@@ -79,6 +82,9 @@ func handleDevicesQuery(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleEnvQuery(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	defer func() { log.Printf("%s completed in %s", r.URL.Path, time.Since(started)) }()
+
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"sucess":false,"message":"method not allowed"}`, http.StatusMethodNotAllowed)
 		return
@@ -127,6 +133,9 @@ func handleEnvQuery(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleColonyQuery(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	defer func() { log.Printf("%s completed in %s", r.URL.Path, time.Since(started)) }()
+
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"success":false,"message":"method not allowed"}`, http.StatusMethodNotAllowed)
 		return
