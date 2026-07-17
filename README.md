@@ -10,7 +10,7 @@
                     │                                              │
   MCU               │   ┌─────────────────┐      ┌──────────────┐  │
   设备  ──MQTT──▶  │   │  listener.go    │      │  web.go      │   │
-  (发布)            │   │  (MQTT 订阅者)   │      │  (:8080)     │  │
+  (发布)            │   │  (MQTT 订阅者)   │      │  (:8182)     │  │
                     │   └────────┬────────┘      └──────┬───────┘  │
                     │            │                      │          │
                     │            ▼                      ▼          │
@@ -31,6 +31,7 @@
 - **环境数据采集** — 订阅 `device/{uuid}/data` 主题，将温度/湿度写入 Tablestore `env` 表
 - **上传 URL 签发** — 订阅 `device/{uuid}/upload` 主题，为图片和记录文件生成 OSS 预签名上传 URL，通过 MQTT 回复给设备
 - **菌落数据记录** — 在文件上传请求时同步将文件路径、菌落数写入 Tablestore `colony` 表
+- **杂菌告警** — 订阅 `device/{uuid}/warn` 主题，触发邮件告警通知用户关注
 - **Web 数据查询** — 提供 `/api/env` 和 `/api/colony` 两个 JSON API，前端使用 Chart.js 展示温度/湿度曲线和菌落图像
 
 ## 快速开始
@@ -39,15 +40,15 @@
 
 - Go 1.26+
 - 阿里云 OSS 和 Tablestore 服务（需提前创建好实例和数据表）
-- MQTT Broker（如 Mosquitto），监听 `tcp://localhost:1883`
+- MQTT Broker（如 Mosquitto），监听地址通过 `PORT` 环境变量配置
 
 ### 配置
 
 复制环境变量模板并填入真实凭据：
 
 ```bash
-# 编辑好 env.sh 填入密钥
-source env.sh
+cp .env.example .env
+# 编辑 .env 填入密钥
 ```
 
 ### 构建
@@ -59,19 +60,44 @@ go build -o bin/web ./cmd/web/
 
 ### 运行
 
+Linux 服务器上一键启动两个后端：
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+脚本会构建 `bin/listener` 和 `bin/web`，同时启动 MQTT 订阅者和 Web 服务，并将日志写入 `logs/listener.log` 与 `logs/web.log`。按 `Ctrl+C` 会同时停止两个服务。
+
+也可以分别启动：
+
 终端 1 — MQTT 订阅者（生产服务）：
 
 ```bash
 ./bin/listener
 ```
 
-终端 2 — Web 服务器（`:8080`）：
+终端 2 — Web 服务器（`:8182`）：
 
 ```bash
 ./bin/web
 ```
 
-浏览器访问 `http://localhost:8080` 查看仪表板。
+浏览器访问 `http://localhost:8182` 查看仪表板。
+
+### 备份 OSS 文件
+
+从 `.env` 读取 OSS 凭据，下载 bucket 中的全部对象，并保留 OSS key 的目录结构：
+
+```bash
+go run ./cmd/oss-download
+```
+
+默认下载到项目根目录的 `oss-download/`（已 gitignore）。可传入目标目录：
+
+```bash
+go run ./cmd/oss-download path/to/backup
+```
 
 ## 环境变量
 
@@ -95,9 +121,9 @@ go build -o bin/web ./cmd/web/
 | `TABLE_INSTANCE_NAME` | 实例名称 |
 | `TABLE_ENDPOINT` | 实例访问地址 |
 | `ENV_TABLE_NAME` | 环境数据表名 |
-| `ENV_MEATURE_NAME` | 环境数据度量名 |
+| `ENV_MEASURE_NAME` | 环境数据度量名 |
 | `COLONY_TABLE_NAME` | 菌落数据表名 |
-| `COLONY_MEATURE_NAME` | 菌落数据度量名 |
+| `COLONY_MEASURE_NAME` | 菌落数据度量名 |
 
 ### MQTT
 
@@ -105,6 +131,34 @@ go build -o bin/web ./cmd/web/
 |---|---|
 | `USERNAME` | Broker 用户名 |
 | `PASSWORD` | Broker 密码 |
+| `PORT` | Broker 连接地址，如 `tcp://localhost:1883` |
+
+### Web 服务器
+
+| 变量 | 说明 |
+|---|---|
+| `WEB_PORT` | HTTP 监听端口，默认 `8182` |
+
+### 邮件告警（可选）
+
+| 变量 | 说明 |
+|---|---|
+| `SMTP_HOST` | SMTP 服务器地址，默认 `smtp.qq.com` |
+| `SMTP_PORT` | SMTP 端口，默认 `465` |
+| `SRC_EMAIL` | 发件人邮箱 |
+| `DEST_EMAIL` | 收件人邮箱 |
+| `AUTHCODE` | SMTP 授权码 |
+
+> 不启用邮件告警时，这一组变量可以不填。
+
+### Bailian AI 推理（可选）
+
+| 变量 | 说明 |
+|---|---|
+| `DASHSCOPE_API_KEY` | 百炼平台 API Key |
+| `MODEL_NAME` | 推理模型名称，如 `qwen3.6-plus` |
+
+> 用于菌落图像的 AI 杂菌识别推理。该功能代码存在但当前未在主流程中调用。
 
 ## API 文档
 
@@ -118,13 +172,14 @@ GET /api/env?uuid=<设备UUID>&start=<起始微秒>&end=<结束微秒>
 
 ```json
 {
-  "success": true,
-  "message": "success",
+  "sucess": true,
   "env": [
-    {"timestamp": "2026-06-27 12:00:00", "temp": 37.5, "hum": 65.2}
+    {"timestamp": "2026-06-27T12:00:00Z", "temp": 37.5, "hum": 65.2}
   ]
 }
 ```
+
+> `/api/env` currently returns the legacy field name `sucess` for frontend compatibility.
 
 ### 查询菌落数据
 
@@ -137,10 +192,9 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 ```json
 {
   "success": true,
-  "message": "success",
   "colony": [
     {
-      "timestamp": "2026-06-27 12:00:00",
+      "timestamp": "2026-06-27T12:00:00Z",
       "number": 15,
       "image": {"success": true, "url": "https://...oss预签名地址..."},
       "record": {"success": true, "url": "https://...oss预签名地址..."}
@@ -156,18 +210,26 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 ```
 ├── cmd/
 │   ├── server/listener.go    # 生产 MQTT 订阅者（main 入口）
-│   └── web/web.go            # Web 服务器（main 入口）
+│   ├── web/web.go            # Web 服务器（main 入口）
+│   └── oss-download/main.go  # 下载 OSS 全部对象的备份工具
 ├── static/
 │   ├── env.html              # 环境数据仪表板（Chart.js 折线图）
-│   └── colony.html           # 菌落图像查看器（缩略图 + 边界框叠加）
+│   ├── colony.html           # 菌落图像查看器（缩略图 + 边界框叠加）
+│   ├── common.js             # 前端共用工具函数（时间转换、查询逻辑）
+│   └── common.css            # 前端共用样式（设计系统）
 ├── utils/
 │   ├── oss_utils.go          # OSS 预签名 URL 生成 + MQTT 回复
-│   └── tablestorage_utils.go # Tablestore 读写（env / colony 表）
+│   ├── tablestorage_utils.go # Tablestore 读写（env / colony 表）
+│   ├── bailian_utils.go      # Bailian AI 推理（当前未在主流程调用）
+│   └── mail_utils.go         # 邮件告警
 ├── web/
 │   ├── env.go                # /api/env 查询逻辑
 │   └── clonony.go            # /api/colony 查询逻辑
 ├── go.mod / go.sum           # Go 模块依赖
-└── env.sh                    # 环境变量（已 gitignore，需自行完善，请勿提交！）
+├── .env.example              # 环境变量模板（可提交）
+├── .env                      # 环境变量（已 gitignore，请勿提交！）
+├── start.sh                  # Linux 一键启动脚本（构建 + 启动两个服务）
+└── build.sh                  # 仅构建两个二进制文件
 ```
 
 ## MQTT 消息协议
@@ -177,8 +239,10 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 主题：`device/{uuid}/data`
 
 ```json
-{"timestamp": "2026-06-27 12:00:00", "temp": 37.5, "hum": 65.2}
+{"timestamp": "20060102-150405", "temp": 37.5, "hum": 65.2}
 ```
+
+> timestamp 格式为 `YYYYMMDD-HHMMSS`，时区为 `Asia/Shanghai`。
 
 服务端收到后写入 Tablestore `env` 表，时间戳截断到整秒。
 
@@ -187,7 +251,7 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 主题：`device/{uuid}/upload`
 
 ```json
-{"timestamp": "2026-06-27 12:00:00", "plateid": 1, "imgpath": "/local/photo.jpg", "txtpath": "/local/result.txt", "number": 15}
+{"timestamp": "20060102-150405", "plateid": 1, "imgpath": "/local/photo.jpg", "txtpath": "/local/result.txt", "number": 15}
 ```
 
 服务端生成 OSS 预签名 PutObject URL，通过以下主题回复：
@@ -195,10 +259,22 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 主题：`server/{uuid}/upload`
 
 ```json
-{"timestamp": "2026-06-27 12:00:00", "success": true, "path": "/local/photo.jpg", "url": "https://oss预签名地址..."}
+{"timestamp": "20060102-150405", "success": true, "path": "/local/photo.jpg", "url": "https://oss预签名地址..."}
 ```
 
 同时将图片路径、记录文件路径、菌落数写入 Tablestore `colony` 表。
+
+### 服务端时间同步
+
+主题：`server/{uuid}/time`
+
+回复当前服务器 Unix 时间戳（秒）。
+
+### 设备告警
+
+主题：`device/{uuid}/warn`
+
+设备发送杂菌警告，服务端收到后通过邮件通知用户。
 
 ## 技术栈
 
@@ -213,7 +289,8 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 
 ## 注意事项
 
-- **时区**：所有时间戳使用 `Asia/Shanghai`，格式 `"2006-01-02 15:04:05"`，解析失败时回退为当前时间
+- **时区**：所有 MQTT 时间戳使用 `Asia/Shanghai`，格式 `"20060102-150405"`，解析失败时回退为当前时间
 - **时间精度**：Tablestore 写入时时间戳截断到整秒（微秒值向下取整）
 - **预签名 URL 有效期**：均为 10 分钟
-- **MQTT Broker 地址**：硬编码为 `tcp://localhost:1883`，如需修改请编辑 `cmd/server/listener.go`
+- **OSS CORS**：`colony.html` 会在浏览器中 `fetch` 识别记录文本，OSS Bucket 需要允许 Web 页面来源的跨域 GET 请求
+- **MQTT Broker 地址**：通过 `PORT` 环境变量配置，如 `tcp://localhost:1883`

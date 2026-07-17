@@ -12,17 +12,22 @@ import (
 )
 
 func InitClient() *tablestore.TimeseriesClient {
-	// yourInstanceName 填写您的实例名称
 	instanceName := os.Getenv("TABLE_INSTANCE_NAME")
-	// yourEndpoint 填写您的实例访问地址
 	endpoint := os.Getenv("TABLE_ENDPOINT")
-	// 获取环境变量里的 AccessKey ID 和 AccessKey Secret
 	accessKeyId := os.Getenv("TABLESTORE_ACCESS_KEY_ID")
 	accessKeySecret := os.Getenv("TABLESTORE_ACCESS_KEY_SECRET")
 
-	// 初始化表格存储客户端
 	client := tablestore.NewTimeseriesClient(endpoint, instanceName, accessKeyId, accessKeySecret)
 	return client
+}
+
+func loadLocation() *time.Location {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		slog.Warn(fmt.Sprintf("Failed to load Asia/Shanghai timezone, falling back to UTC: %v", err))
+		return time.UTC
+	}
+	return loc
 }
 
 // RecordEnvData 记录温湿度数据
@@ -42,7 +47,7 @@ func OnDataReceived(uuid string, payload string) {
 		return
 	}
 
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc := loadLocation()
 	timestamp, err := time.ParseInLocation("20060102-150405", json_result.TimeStamp, loc)
 	if err != nil {
 		slog.Warn(fmt.Sprintf("Time parse fail: %v", err))
@@ -54,13 +59,10 @@ func OnDataReceived(uuid string, payload string) {
 	table_name := os.Getenv("ENV_TABLE_NAME")
 	measurement_name := os.Getenv("ENV_MEASURE_NAME")
 
-	// 构造时序数据行 timeseriesRow。
-	// timeseriesKey 标识时间线：度量名称、数据源主机和标签。
 	timeseriesKey := tablestore.NewTimeseriesKey()
 	timeseriesKey.SetMeasurementName(measurement_name)
 	timeseriesKey.SetDataSource(uuid)
 
-	// timeseriesRow 在 timeseriesKey 的基础上关联时间戳和字段值。
 	timeseriesRow := tablestore.NewTimeseriesRow(timeseriesKey)
 	timeseriesRow.SetTimeInus(timestamp.UnixMicro() / 1e6 * 1e6)
 	timeseriesRow.AddField("temperature",
@@ -68,12 +70,9 @@ func OnDataReceived(uuid string, payload string) {
 	timeseriesRow.AddField("humidity",
 		tablestore.NewColumnValue(tablestore.ColumnType_DOUBLE, json_result.Hum))
 
-	// 构造写入时序数据的请求。
 	putTimeseriesDataRequest := tablestore.NewPutTimeseriesDataRequest(table_name)
 	putTimeseriesDataRequest.AddTimeseriesRows(timeseriesRow)
 
-	// 调用时序客户端写入时序数据。
-	// putTimeseriesDataResponse, err := client.PutTimeseriesData(putTimeseriesDataRequest)
 	_, err = client.PutTimeseriesData(putTimeseriesDataRequest)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Fail to write into the table: %v", err))
@@ -95,14 +94,11 @@ func RecordColonyData(uuid string,
 	table_name := os.Getenv("COLONY_TABLE_NAME")
 	measurement_name := os.Getenv("COLONY_MEASURE_NAME")
 
-	// 构造时序数据行 timeseriesRow。
-	// timeseriesKey 标识时间线：度量名称、数据源主机和标签。
 	timeseriesKey := tablestore.NewTimeseriesKey()
 	timeseriesKey.SetMeasurementName(measurement_name)
 	timeseriesKey.SetDataSource(uuid)
 	timeseriesKey.AddTag("plate_id", strconv.Itoa(plate_id))
 
-	// timeseriesRow 在 timeseriesKey 的基础上关联时间戳和字段值。
 	timeseriesRow := tablestore.NewTimeseriesRow(timeseriesKey)
 	timeseriesRow.SetTimeInus(timestamp.UnixMicro() / 1e6 * 1e6)
 	timeseriesRow.AddField("image",
@@ -112,12 +108,9 @@ func RecordColonyData(uuid string,
 	timeseriesRow.AddField("number",
 		tablestore.NewColumnValue(tablestore.ColumnType_INTEGER, number))
 
-	// 构造写入时序数据的请求。
 	putTimeseriesDataRequest := tablestore.NewPutTimeseriesDataRequest(table_name)
 	putTimeseriesDataRequest.AddTimeseriesRows(timeseriesRow)
 
-	// 调用时序客户端写入时序数据。
-	// putTimeseriesDataResponse, err := client.PutTimeseriesData(putTimeseriesDataRequest)
 	_, err := client.PutTimeseriesData(putTimeseriesDataRequest)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Fail to write into the table: %v", err))

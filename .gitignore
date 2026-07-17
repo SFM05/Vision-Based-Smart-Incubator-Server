@@ -1,4 +1,12 @@
-AGENTS.md
+.env
+.env.*
+!.env.example
 env.sh
 cmd/scripts
 bin
+logs/
+/oss-download/
+*.exe
+*.test
+*.out
+*.log

@@ -3,9 +3,13 @@ module mqtt_listener
 go 1.26.2
 
 require (
-	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.1 // indirect
-	github.com/aliyun/aliyun-tablestore-go-sdk v1.9.2 // indirect
-	github.com/eclipse/paho.mqtt.golang v1.5.1 // indirect
+	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.5.1
+	github.com/aliyun/aliyun-tablestore-go-sdk v1.9.2
+	github.com/eclipse/paho.mqtt.golang v1.5.1
+	github.com/joho/godotenv v1.5.1
+)
+
+require (
 	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect

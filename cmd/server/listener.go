@@ -12,6 +12,7 @@ import (
 
 	"mqtt_listener/utils"
 
+	"github.com/joho/godotenv"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -19,7 +20,8 @@ var messageHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Messa
 	// topic结构：device/$uuid/$request
 	topic := strings.Split(string(msg.Topic()), "/")
 	if len(topic) < 3 {
-		slog.Error(fmt.Sprintf("Invalid topic encuntered: %s", msg.Topic()))
+		slog.Error(fmt.Sprintf("Invalid topic encountered: %s", msg.Topic()))
+		return
 	}
 	uuid := topic[1]
 	request := topic[2]
@@ -38,18 +40,22 @@ var messageHandler MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Messa
 		client.Publish("server"+"/"+uuid+"/"+"time",
 			1,
 			false,
-			strconv.Itoa(time.Now().Second()))
+			strconv.FormatInt(time.Now().Unix(), 10))
 
 	case "warn":
 		slog.Info(fmt.Sprintf("Receive warning from %s", uuid))
 		go utils.SendAlert(uuid, "杂菌警告", "疑似发现杂菌，请予以关注。")
 
 	default:
-		slog.Warn(fmt.Sprintf("Receive unkown message from %s: %s", uuid, payload))
+		slog.Warn(fmt.Sprintf("Receive unknown message from %s: %s", uuid, payload))
 	}
 }
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("no .env file found, using environment variables", "error", err)
+	}
+
 	username := os.Getenv("USERNAME")
 	password := os.Getenv("PASSWORD")
 	port := os.Getenv("PORT")
@@ -66,6 +72,7 @@ func main() {
 	client := MQTT.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		slog.Error(fmt.Sprintf("MQTT connect failed: %v", token.Error()))
+		os.Exit(1)
 	}
 	slog.Info("MQTT connection established.")
 
@@ -73,6 +80,7 @@ func main() {
 	qos := 1
 	if token := client.Subscribe(topic, byte(qos), nil); token.Wait() && token.Error() != nil {
 		slog.Error(fmt.Sprintf("Subscribe topic failed: %v", token.Error()))
+		os.Exit(1)
 	}
 	slog.Info(fmt.Sprintf("Subscribe topic success: %s(QoS %d)", topic, qos))
 

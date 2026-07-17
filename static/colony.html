@@ -3,576 +3,1465 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>菌落图像查询</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 1100px; margin: 0 auto; padding: 24px;
-            background: #f5f5f5; color: #333;
-        }
-        h1 { text-align: center; margin-bottom: 24px; color: #1a1a1a; }
-        .form-row {
-            display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
-        }
-        .form-row .field {
-            flex: 1; min-width: 180px;
-        }
-        .form-row .field label {
-            display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;
-        }
-        .form-row .field input {
-            width: 100%; padding: 8px 12px;
-            border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
-        }
-        .quick-buttons {
-            display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
-        }
-        .quick-buttons button {
-            padding: 6px 16px; border: 1px solid #1890ff;
-            background: #fff; color: #1890ff; border-radius: 6px;
-            cursor: pointer; font-size: 13px; transition: all 0.2s;
-        }
-        .quick-buttons button:hover { background: #1890ff; color: #fff; }
-        .custom-time {
-            display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
-        }
-        .custom-time label {
-            font-weight: 600; font-size: 13px;
-        }
-        .custom-time input {
-            padding: 6px 10px; border: 1px solid #ccc;
-            border-radius: 6px; font-size: 13px; margin-left: 4px;
-        }
-        #query-btn {
-            display: block; width: 100%; padding: 10px;
-            background: #1890ff; color: #fff; border: none;
-            border-radius: 6px; font-size: 15px; cursor: pointer;
-            margin-bottom: 20px; transition: background 0.2s;
-        }
-        #query-btn:hover { background: #1677cc; }
-        #query-btn:disabled { background: #999; cursor: not-allowed; }
-        #error-message {
-            color: #d32f2f; background: #fdecea;
-            border: 1px solid #f5c6cb; border-radius: 6px;
-            padding: 10px 14px; margin-bottom: 16px; display: none;
-        }
-        #info-message {
-            color: #155724; background: #d4edda;
-            border: 1px solid #c3e6cb; border-radius: 6px;
-            padding: 10px 14px; margin-bottom: 16px; display: none;
-        }
-
-        /* Thumbnail grid */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 16px;
-        }
-        .card {
-            background: #fff; border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            overflow: hidden; cursor: pointer;
-            transition: box-shadow 0.2s, transform 0.2s;
-        }
-        .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px); }
-        .card-thumb {
-            width: 100%; height: 160px; object-fit: cover;
-            display: block; background: #eee;
-        }
-        .card-body {
-            padding: 10px 12px;
-        }
-        .card-body .time {
-            font-size: 12px; color: #888; margin-bottom: 4px;
-        }
-        .card-body .count {
-            font-size: 13px; font-weight: 600; color: #1890ff;
-        }
-
-        /* Modal */
-        .modal-overlay {
-            display: none; position: fixed; z-index: 1000;
-            left: 0; top: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.75);
-            justify-content: center; align-items: center;
-            padding: 24px;
-        }
-        .modal-overlay.active { display: flex; }
-        .modal-content {
-            background: #fff; border-radius: 10px;
-            max-width: 90vw; max-height: 90vh;
-            overflow-y: auto; position: relative;
-            padding: 20px;
-        }
-        .modal-close {
-            position: absolute; right: 16px; top: 12px;
-            font-size: 28px; cursor: pointer; color: #888;
-            line-height: 1; background: none; border: none;
-        }
-        .modal-close:hover { color: #333; }
-        .modal-header {
-            display: flex; justify-content: space-between;
-            align-items: center; margin-bottom: 16px;
-        }
-        .modal-header h2 { font-size: 16px; color: #333; }
-        .modal-header .modal-info {
-            display: flex; gap: 16px; align-items: center;
-        }
-        .modal-header .modal-time { font-size: 13px; color: #888; }
-        .modal-header .modal-count {
-            font-size: 13px; font-weight: 600; color: #1890ff;
-        }
-        .img-container {
-            position: relative; display: inline-block; max-width: 100%;
-        }
-        .img-container img {
-            display: block; max-width: 100%; max-height: 65vh;
-            border-radius: 4px;
-        }
-        .box-overlay {
-            position: absolute; border: 2px solid rgba(255, 50, 50, 0.55);
-            background: rgba(255, 50, 50, 0.05);
-            pointer-events: auto; border-radius: 2px;
-            cursor: pointer; transition: all 0.15s;
-        }
-        .box-overlay:hover {
-            border-color: rgba(255, 50, 50, 1);
-            background: rgba(255, 50, 50, 0.15);
-            z-index: 10;
-        }
-        .box-overlay.high {
-            border-color: rgba(82, 196, 26, 0.55);
-            background: rgba(82, 196, 26, 0.05);
-        }
-        .box-overlay.high:hover {
-            border-color: rgba(82, 196, 26, 1);
-            background: rgba(82, 196, 26, 0.15);
-        }
-        .box-tooltip {
-            position: absolute; z-index: 100;
-            background: rgba(0, 0, 0, 0.85);
-            color: #fff; font-size: 12px; padding: 6px 10px;
-            border-radius: 4px; white-space: nowrap;
-            pointer-events: none;
-            transform: translate(-50%, -100%);
-            margin-top: -8px;
-        }
-        .modal-footer {
-            margin-top: 16px; display: flex;
-            justify-content: space-between; align-items: flex-start;
-            gap: 16px; flex-wrap: wrap;
-        }
-        .box-list {
-            flex: 1; min-width: 200px;
-            max-height: 160px; overflow-y: auto;
-            font-size: 13px;
-        }
-        .box-list table {
-            width: 100%; border-collapse: collapse; font-size: 12px;
-        }
-        .box-list th, .box-list td {
-            padding: 4px 8px; text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-        .box-list th { background: #fafafa; font-weight: 600; position: sticky; top: 0; }
-        .download-btns {
-            display: flex; flex-direction: column; gap: 8px;
-        }
-        .download-btns a {
-            padding: 8px 20px; color: #fff; border: none;
-            border-radius: 6px; font-size: 14px; cursor: pointer;
-            transition: background 0.2s; white-space: nowrap;
-            text-decoration: none; text-align: center; display: inline-block;
-        }
-        #download-img-btn { background: #52c41a; }
-        #download-img-btn:hover { background: #45a816; }
-        #download-record-btn { background: #1890ff; }
-        #download-record-btn:hover { background: #1677cc; }
-
-        .loading-spinner {
-            text-align: center; padding: 40px; color: #888;
-        }
-        .loading-spinner::after {
-            content: ''; display: inline-block; width: 32px; height: 32px;
-            border: 3px solid #ddd; border-top-color: #1890ff;
-            border-radius: 50%; animation: spin 0.8s linear infinite;
-            margin-bottom: 8px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+    <title>菌落图像查询 — 智能培养箱</title>
+    <link rel="stylesheet" href="common.css">
 </head>
 <body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 6v6l4 2"/></svg>
+      智能培养箱
+    </a>
+    <div class="nav-links">
+      <a href="/env.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>
+        <span>温湿度</span>
+      </a>
+      <a href="/colony.html" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        <span>菌落图像</span>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
     <h1>菌落图像查询</h1>
+    <p>查询培养皿菌落检测结果，支持图像浏览与识别数据下载</p>
+  </div>
 
+  <div class="card">
     <div class="form-row">
-        <div class="field">
-            <label for="uuid">设备 UUID</label>
-            <input type="text" id="uuid" placeholder="请输入设备 UUID">
+      <div class="field">
+        <label for="uuid">设备 UUID</label>
+        <select id="uuid" disabled>
+          <option value="">正在加载设备...</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="plateid">盘位号</label>
+        <select id="plateid" disabled>
+          <option value="">请先选择设备</option>
+        </select>
+      </div>
+    </div>
+    <div class="selector-status" id="device-status">从阿里云 Tablestore 获取设备和盘位列表。</div>
+
+    <div class="query-row">
+      <div class="custom-time">
+        <div class="time-field">
+          <label>起始时间</label>
+          <input type="datetime-local" id="start-time">
         </div>
-        <div class="field">
-            <label for="plateid">盘位号</label>
-            <input type="number" id="plateid" placeholder="1" min="1">
+        <div class="time-field">
+          <label>截止时间</label>
+          <input type="datetime-local" id="end-time">
         </div>
+      </div>
+
+      <div class="quick-buttons">
+        <button class="quick-btn" onclick="queryQuick(3600)">最近 1 小时</button>
+        <button class="quick-btn" onclick="queryQuick(21600)">最近 6 小时</button>
+        <button class="quick-btn" onclick="queryQuick(86400)">最近 24 小时</button>
+        <button class="quick-btn" onclick="queryQuick(259200)">最近 3 天</button>
+        <button class="quick-btn" onclick="queryQuick(604800)">最近 7 天</button>
+      </div>
     </div>
 
-    <div class="quick-buttons">
-        <button onclick="queryQuick(3600)">最近 1 小时</button>
-        <button onclick="queryQuick(21600)">最近 6 小时</button>
-        <button onclick="queryQuick(86400)">最近 24 小时</button>
-        <button onclick="queryQuick(604800)">最近 7 天</button>
+    <button class="btn-primary" id="query-btn" onclick="queryCustom()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      查询图像
+    </button>
+  </div>
+
+  <div id="error-message" class="alert alert-error" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+    <span></span>
+  </div>
+  <div id="info-message" class="alert alert-info" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+    <span></span>
+  </div>
+
+  <div id="grid-container">
+    <div class="loading hidden" id="loading-spinner">
+      <div class="spinner"></div>
+      加载中...
     </div>
-
-    <div class="custom-time">
-        <label>起始时间 <input type="datetime-local" id="start-time"></label>
-        <label>截止时间 <input type="datetime-local" id="end-time"></label>
+    <div id="colony-summary" class="summary-cards hidden">
+      <div class="summary-card">
+        <div class="summary-label">图像总数</div>
+        <div class="summary-value" id="sum-total-images">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">菌落总数</div>
+        <div class="summary-value" id="sum-total-colonies">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">最新采集时间</div>
+        <div class="summary-value" id="sum-latest-time">--</div>
+      </div>
     </div>
+    <div class="grid" id="card-grid"></div>
+  </div>
 
-    <button id="query-btn" onclick="queryCustom()">查询</button>
-
-    <div id="error-message"></div>
-    <div id="info-message"></div>
-
-    <div id="grid-container">
-        <div class="loading-spinner" style="display:none;" id="loading-spinner">加载中...</div>
-        <div class="grid" id="card-grid"></div>
-    </div>
-
-    <!-- Modal -->
-    <div class="modal-overlay" id="modal">
-        <div class="modal-content">
-            <button class="modal-close" onclick="closeModal()">&times;</button>
-            <div class="modal-header">
-                <h2 id="modal-title">菌落图像</h2>
-                <div class="modal-info">
-                    <span class="modal-count" id="modal-count"></span>
-                    <span class="modal-time" id="modal-time"></span>
-                </div>
-            </div>
-            <div class="img-container" id="img-container">
-                <img id="modal-img" src="" alt="菌落图像">
-            </div>
-            <div class="modal-footer">
-                <div class="box-list" id="box-list">
-                    <table>
-                        <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>置信度</th></tr></thead>
-                        <tbody id="box-tbody"></tbody>
-                    </table>
-                </div>
-                <div class="download-btns">
-                    <a id="download-img-btn" href="" download>下载原图</a>
-                    <a id="download-record-btn" href="" download>下载记录</a>
-                </div>
-            </div>
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <div class="modal-header">
+        <h2 id="modal-title">菌落图像</h2>
+        <div class="modal-info">
+          <span class="modal-count" id="modal-count"></span>
+          <span class="modal-time" id="modal-time"></span>
         </div>
+      </div>
+      <div class="modal-toolbar">
+        <button class="btn-secondary" id="edit-mode-btn" onclick="toggleEditMode()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          编辑框
+        </button>
+        <button class="btn-secondary hidden" id="delete-box-btn" onclick="deleteSelectedBox()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          删除所选
+        </button>
+        <button class="btn-secondary hidden" id="show-deleted-btn" onclick="showDeletedOriginalBoxes()" title="恢复并显示所有被隐藏的原始框">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span id="show-deleted-label">显示已删除</span>
+        </button>
+        <button class="btn-secondary hidden" id="undo-btn" onclick="undoCorrectionEdit()" title="撤销上一步 Ctrl+Z">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
+          撤销
+        </button>
+        <button class="btn-secondary hidden" id="redo-btn" onclick="redoCorrectionEdit()" title="重做上一步 Ctrl+Y">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/></svg>
+          重做
+        </button>
+        <button class="btn-secondary hidden" id="save-correction-btn" onclick="saveCorrections()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          保存修正
+        </button>
+        <button class="btn-secondary hidden" id="clear-correction-btn" onclick="clearCorrections()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          清空修正
+        </button>
+        <button class="btn-secondary hidden" id="download-corrected-btn" onclick="downloadCorrectedRecord()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+          下载修正数据
+        </button>
+      </div>
+      <div class="edit-hint hidden" id="edit-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        在图片内拖动以绘制新的用户框。点击框以选中，然后按 Delete 键。删除自动框仅在用户修正中标记为隐藏；点击“显示已删除”可临时显示/隐藏这些框。支持 Ctrl+Z 撤销、Ctrl+Y 或 Ctrl+Shift+Z 重做。
+      </div>
+      <div class="img-container" id="img-container">
+        <div class="modal-img-loader" id="modal-img-loader">
+          <div class="spinner"></div>
+          加载图片中...
+        </div>
+        <img id="modal-img" src="" alt="菌落图像">
+      </div>
+      <div class="modal-footer">
+        <div class="box-list" id="box-list">
+          <table>
+            <thead><tr><th>x1</th><th>y1</th><th>x2</th><th>y2</th><th>置信度</th><th>来源</th></tr></thead>
+            <tbody id="box-tbody"></tbody>
+          </table>
+        </div>
+        <div class="download-btns">
+          <a id="download-img-btn" href="" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            下载原图
+          </a>
+          <button class="btn-secondary" id="download-record-btn" onclick="downloadRecordCSV()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            下载记录
+          </button>
+        </div>
+      </div>
+      <div class="ai-panel" id="ai-panel">
+        <div class="ai-panel-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <span>AI 分析</span>
+          <button class="btn-secondary" id="ai-analyze-btn" onclick="runAnalyze()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            运行 AI 分析
+          </button>
+          <button class="btn-secondary hidden" id="copy-ai-btn" onclick="copyAIAnalysis()" title="复制分析结果">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            复制
+          </button>
+        </div>
+        <div class="ai-panel-body" id="ai-panel-body">
+          <span class="ai-placeholder">暂无 AI 分析结果。点击"运行 AI 分析"生成。</span>
+        </div>
+      </div>
     </div>
+  </div>
+</div>
 
-    <script>
-        var BJ_OFFSET = 8 * 3600000;
-        var currentData = [];
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="common.js"></script>
+<script>
+  var currentData = [];
+  var editMode = false;
+  var originalBoxes = [];
+  var userAddedBoxes = [];
+  var deletedOriginalIds = [];
+  var selectedBoxIndex = -1;
+  var isDrawing = false;
+  var drawStart = null;
+  var drawOverlay = null;
+  var currentModalIndex = -1;
+  var currentUUID = '';
+  var currentPlateID = '0';
+  var resizeObserver = null;
+  var modalImageReady = false;
+  var boxCoordinateFrame = {width: 0, height: 0};
+  var MANUAL_BOX_CONFIDENCE = -1;
+  var undoStack = [];
+  var redoStack = [];
+  var showDeletedOriginals = false;
 
-        function pad2(n) { return String(n).padStart(2, '0'); }
+  async function doQuery(startMicro, endMicro) {
+    var uuid = document.getElementById('uuid').value.trim();
+    var plateid = getValidPlateID();
+    if (!uuid) { showError('请输入设备 UUID'); return; }
+    if (!plateid) { return; }
+    hideError();
+    hideInfo();
 
-        function utcMsToBeijing(utcMs) {
-            return new Date(utcMs + BJ_OFFSET);
+    document.getElementById('card-grid').innerHTML = '';
+    document.getElementById('loading-spinner').classList.remove('hidden');
+    document.getElementById('colony-summary').classList.add('hidden');
+    document.getElementById('query-btn').disabled = true;
+
+    try {
+      var url = '/api/colony?uuid=' + encodeURIComponent(uuid) +
+                '&plateid=' + encodeURIComponent(plateid) +
+                '&start=' + startMicro + '&end=' + endMicro;
+      var resp = await fetch(url);
+      var data = await resp.json();
+
+      if (!data.success) {
+        showError(data.message || '查询失败');
+        return;
+      }
+
+      if (!data.colony || data.colony.length === 0) {
+        showInfo('查询结果为空，请检查设备 UUID、盘位号和时间范围');
+        return;
+      }
+
+      var hiddenInvalidCount = countFullyUnavailableRecords(data.colony);
+      var displayData = data.colony.filter(function(item) {
+        return !isFullyUnavailableRecord(item);
+      });
+
+      if (displayData.length === 0) {
+        showInfo('查询结果均为无效记录，已隐藏 ' + hiddenInvalidCount + ' 条图片和识别数据都不可用的记录');
+        return;
+      }
+
+      if (hiddenInvalidCount > 0) {
+        showInfo('已隐藏 ' + hiddenInvalidCount + ' 条图片和识别数据都不可用的记录');
+      }
+
+      currentUUID = uuid;
+      currentPlateID = plateid;
+      currentData = displayData;
+      currentData.sort(function(a, b) {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+      updateSummary(currentData);
+      renderGrid(currentData);
+    } catch (err) {
+      showError('请求失败: ' + err.message);
+    } finally {
+      document.getElementById('loading-spinner').classList.add('hidden');
+      document.getElementById('query-btn').disabled = false;
+    }
+  }
+
+  function isFullyUnavailableRecord(item) {
+    return (!item.image || !item.image.success) && (!item.record || !item.record.success);
+  }
+
+  function countFullyUnavailableRecords(items) {
+    var count = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (isFullyUnavailableRecord(items[i])) count++;
+    }
+    return count;
+  }
+
+  function getValidPlateID() {
+    var input = document.getElementById('plateid');
+    var value = input.value.trim();
+    if (!validatePlateIDInput()) {
+      showError('盘位号必须是非负整数');
+      input.focus();
+      return null;
+    }
+    return value;
+  }
+
+  function validatePlateIDInput() {
+    var input = document.getElementById('plateid');
+    var value = input.value.trim();
+    var valid = /^\d+$/.test(value);
+    input.setCustomValidity(valid ? '' : '盘位号必须是非负整数');
+    return valid;
+  }
+
+  function updateSummary(colonyData) {
+    var totalImages = colonyData.length;
+    var totalColonies = 0;
+    var latestTime = '';
+    for (var i = 0; i < colonyData.length; i++) {
+      totalColonies += (colonyData[i].number || 0);
+      var t = colonyData[i].timestamp;
+      if (!latestTime || t > latestTime) latestTime = t;
+    }
+    document.getElementById('sum-total-images').textContent = totalImages;
+    document.getElementById('sum-total-colonies').textContent = totalColonies;
+    if (latestTime) {
+      document.getElementById('sum-latest-time').textContent = formatBeijingFull(new Date(latestTime).getTime());
+    }
+    document.getElementById('colony-summary').classList.remove('hidden');
+  }
+
+  async function renderGrid(colonyData) {
+    var grid = document.getElementById('card-grid');
+    grid.innerHTML = '';
+
+    var cards = [];
+    for (var i = 0; i < colonyData.length; i++) {
+      var item = colonyData[i];
+      var x = new Date(item.timestamp).getTime();
+      var timeStr = formatBeijingFull(x);
+
+      var card = document.createElement('div');
+      card.className = 'colony-card';
+      card.dataset.index = i;
+
+      var thumbWrap = document.createElement('div');
+      thumbWrap.className = 'card-thumb-wrap';
+      var loader = document.createElement('div');
+      loader.className = 'card-thumb-loader';
+      loader.innerHTML = '<div class="spinner"></div>';
+      thumbWrap.appendChild(loader);
+      var img = document.createElement('img');
+      img.className = 'card-thumb';
+      img.alt = timeStr;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      thumbWrap.appendChild(img);
+      card.appendChild(thumbWrap);
+
+      var body = document.createElement('div');
+      body.className = 'card-body';
+      var aiBadge = item.reply ? '<span class="ai-badge">AI</span>' : '';
+      body.innerHTML = '<div class="time">' + timeStr + '</div>' +
+                       '<div class="count"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>菌落数: ' + (item.number || 0) + ' ' + aiBadge + '</div>';
+      card.appendChild(body);
+
+      card.addEventListener('click', function(idx) {
+        return function() { openModal(idx); };
+      }(i));
+
+      grid.appendChild(card);
+      cards.push({card: card, img: img, loader: loader, item: item});
+    }
+
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      if (c.item.image && c.item.image.success && c.item.image.url) {
+        c.img.onload = function(loader) {
+          return function() { loader.classList.add('loaded'); };
+        }(c.loader);
+        c.img.onerror = function(loader, img) {
+          return function() {
+            loader.innerHTML = '图片加载失败';
+            img.style.visibility = 'hidden';
+          };
+        }(c.loader, c.img);
+        c.img.src = c.item.image.url;
+        if (c.img.complete && c.img.naturalWidth > 0) { c.loader.classList.add('loaded'); }
+      } else {
+        c.loader.innerHTML = '图片不可用';
+        c.img.alt = '';
+        c.img.style.visibility = 'hidden';
+        c.img.style.objectFit = 'contain';
+        c.img.style.padding = '24px';
+        c.img.style.background = 'var(--border-light)';
+      }
+    }
+  }
+
+  function getImageMetrics() {
+    var container = document.getElementById('img-container');
+    var img = document.getElementById('modal-img');
+    var containerRect = container.getBoundingClientRect();
+    var imgRect = img.getBoundingClientRect();
+    var displayW = imgRect.width || img.clientWidth;
+    var displayH = imgRect.height || img.clientHeight;
+    if (displayW === 0 || displayH === 0) {
+      displayW = img.naturalWidth;
+      displayH = img.naturalHeight;
+    }
+    return {
+      scaleX: displayW / img.naturalWidth,
+      scaleY: displayH / img.naturalHeight,
+      displayW: displayW,
+      displayH: displayH,
+      offsetX: imgRect.left - containerRect.left,
+      offsetY: imgRect.top - containerRect.top
+    };
+  }
+
+  function getBoxCoordinateFrame() {
+    var img = document.getElementById('modal-img');
+    return {
+      width: boxCoordinateFrame.width || img.naturalWidth || 1,
+      height: boxCoordinateFrame.height || img.naturalHeight || 1
+    };
+  }
+
+  function updateBoxCoordinateFrame(boxes) {
+    var img = document.getElementById('modal-img');
+    var naturalW = img.naturalWidth || 0;
+    var naturalH = img.naturalHeight || 0;
+    var frameW = naturalW;
+    var frameH = naturalH;
+    var maxX = 0;
+    var maxY = 0;
+
+    for (var i = 0; i < boxes.length; i++) {
+      maxX = Math.max(maxX, boxes[i].x1 || 0, boxes[i].x2 || 0);
+      maxY = Math.max(maxY, boxes[i].y1 || 0, boxes[i].y2 || 0);
+    }
+
+    if ((!naturalW || !naturalH) && maxX > 0 && maxY > 0) {
+      frameW = maxX;
+      frameH = maxY;
+    }
+
+    // Detection records are often exported in the model input frame (commonly
+    // 640x640), while OSS stores the original higher-resolution image.
+    if (naturalW > 800 && naturalH > 800 && maxX > 0 && maxY > 0 && maxX <= 640 && maxY <= 640) {
+      frameW = 640;
+      frameH = 640;
+    }
+
+    boxCoordinateFrame = {width: frameW || 1, height: frameH || 1};
+  }
+
+  function boxToDisplayX(x, metrics) {
+    var frame = getBoxCoordinateFrame();
+    return metrics.offsetX + (x / frame.width) * metrics.displayW;
+  }
+
+  function boxToDisplayY(y, metrics) {
+    var frame = getBoxCoordinateFrame();
+    return metrics.offsetY + (y / frame.height) * metrics.displayH;
+  }
+
+  function displayToBoxX(x, metrics) {
+    var frame = getBoxCoordinateFrame();
+    return ((x - metrics.offsetX) / metrics.displayW) * frame.width;
+  }
+
+  function displayToBoxY(y, metrics) {
+    var frame = getBoxCoordinateFrame();
+    return ((y - metrics.offsetY) / metrics.displayH) * frame.height;
+  }
+
+  function makeOriginalBox(box, originalIndex) {
+    return {
+      x1: box.x1,
+      y1: box.y1,
+      x2: box.x2,
+      y2: box.y2,
+      conf: box.conf,
+      source: 'auto',
+      originalIndex: originalIndex
+    };
+  }
+
+  function normalizeBox(box, source, originalIndex) {
+    var frame = getBoxCoordinateFrame();
+    var x1 = Math.min(frame.width, Math.max(0, Math.min(box.x1, box.x2)));
+    var y1 = Math.min(frame.height, Math.max(0, Math.min(box.y1, box.y2)));
+    var x2 = Math.min(frame.width, Math.max(box.x1, box.x2));
+    var y2 = Math.min(frame.height, Math.max(box.y1, box.y2));
+    return {
+      x1: x1,
+      y1: y1,
+      x2: x2,
+      y2: y2,
+      conf: typeof box.conf === 'number' ? box.conf : -1,
+      source: source,
+      originalIndex: originalIndex
+    };
+  }
+
+  function normalizeSavedUserBox(box) {
+    var img = document.getElementById('modal-img');
+    var frame = getBoxCoordinateFrame();
+    var maxX = Math.max(box.x1 || 0, box.x2 || 0);
+    var maxY = Math.max(box.y1 || 0, box.y2 || 0);
+    if (frame.width < img.naturalWidth && maxX > frame.width && maxX <= img.naturalWidth &&
+        frame.height < img.naturalHeight && maxY > frame.height && maxY <= img.naturalHeight) {
+      return {
+        x1: box.x1 / img.naturalWidth * frame.width,
+        y1: box.y1 / img.naturalHeight * frame.height,
+        x2: box.x2 / img.naturalWidth * frame.width,
+        y2: box.y2 / img.naturalHeight * frame.height,
+        conf: box.conf
+      };
+    }
+    return box;
+  }
+
+  function isOriginalDeleted(originalIndex) {
+    return deletedOriginalIds.indexOf(originalIndex) !== -1;
+  }
+
+  function getVisibleBoxes() {
+    var visible = [];
+    for (var i = 0; i < originalBoxes.length; i++) {
+      if (!isOriginalDeleted(i)) {
+        visible.push(makeOriginalBox(originalBoxes[i], i));
+      }
+    }
+    for (var j = 0; j < userAddedBoxes.length; j++) {
+      var b = userAddedBoxes[j];
+      visible.push({x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, conf: typeof b.conf === 'number' ? b.conf : MANUAL_BOX_CONFIDENCE, source: 'user', userIndex: j});
+    }
+    return visible;
+  }
+
+  function makeDeletedOriginalBox(box, originalIndex) {
+    var b = makeOriginalBox(box, originalIndex);
+    b.source = 'deleted';
+    return b;
+  }
+
+  function getDisplayBoxes() {
+    var display = getVisibleBoxes();
+    if (showDeletedOriginals) {
+      for (var i = 0; i < deletedOriginalIds.length; i++) {
+        var originalIndex = deletedOriginalIds[i];
+        if (originalBoxes[originalIndex]) {
+          display.push(makeDeletedOriginalBox(originalBoxes[originalIndex], originalIndex));
         }
+      }
+    }
+    return display;
+  }
 
-        function formatBeijingFull(utcMs) {
-            var d = utcMsToBeijing(utcMs);
-            return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()) + ' ' +
-                   pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
-        }
+  function serializeUserCorrections() {
+    return {
+      version: 1,
+      deleted_original_ids: deletedOriginalIds.slice().sort(function(a, b) { return a - b; }),
+      added_boxes: userAddedBoxes.map(function(b) {
+        return {x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, conf: MANUAL_BOX_CONFIDENCE};
+      }),
+      updated_at: new Date().toISOString()
+    };
+  }
 
-        function formatDatetimeLocal(date) {
-            return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + 'T' +
-                   pad2(date.getHours()) + ':' + pad2(date.getMinutes());
-        }
+  function cloneUserBoxes(boxes) {
+    return boxes.map(function(b) {
+      return {x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, conf: b.conf};
+    });
+  }
 
-        function queryQuick(seconds) {
-            var now = Math.floor(Date.now() / 1000);
-            var start = (now - seconds) * 1000000;
-            var end = now * 1000000;
-            document.getElementById('start-time').value = formatDatetimeLocal(new Date((now - seconds) * 1000));
-            document.getElementById('end-time').value = formatDatetimeLocal(new Date(now * 1000));
-            doQuery(start, end);
-        }
+  function snapshotEditState() {
+    return {
+      userAddedBoxes: cloneUserBoxes(userAddedBoxes),
+      deletedOriginalIds: deletedOriginalIds.slice()
+    };
+  }
 
-        function queryCustom() {
-            var startStr = document.getElementById('start-time').value;
-            var endStr = document.getElementById('end-time').value;
-            if (!startStr || !endStr) {
-                showError('请选择起始和截止时间');
-                return;
+  function applyEditState(state) {
+    userAddedBoxes = cloneUserBoxes(state.userAddedBoxes || []);
+    deletedOriginalIds = (state.deletedOriginalIds || []).slice();
+    selectedBoxIndex = -1;
+    renderBoxes();
+    updateBoxTable();
+    updateEditButtons();
+  }
+
+  function recordEditState() {
+    undoStack.push(snapshotEditState());
+    if (undoStack.length > 100) undoStack.shift();
+    redoStack = [];
+    updateEditButtons();
+  }
+
+  function resetEditHistory() {
+    undoStack = [];
+    redoStack = [];
+    updateEditButtons();
+  }
+
+  function undoCorrectionEdit() {
+    if (undoStack.length === 0) return;
+    redoStack.push(snapshotEditState());
+    applyEditState(undoStack.pop());
+  }
+
+  function redoCorrectionEdit() {
+    if (redoStack.length === 0) return;
+    undoStack.push(snapshotEditState());
+    applyEditState(redoStack.pop());
+  }
+
+  function updateEditButtons() {
+    var undoBtn = document.getElementById('undo-btn');
+    var redoBtn = document.getElementById('redo-btn');
+    var showDeletedBtn = document.getElementById('show-deleted-btn');
+    if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+    if (showDeletedBtn) {
+      if (deletedOriginalIds.length === 0) showDeletedOriginals = false;
+      showDeletedBtn.disabled = deletedOriginalIds.length === 0;
+      var label = document.getElementById('show-deleted-label');
+      if (label) {
+        label.textContent = showDeletedOriginals ? '隐藏已删除(' + deletedOriginalIds.length + ')' : (deletedOriginalIds.length > 0 ? '显示已删除(' + deletedOriginalIds.length + ')' : '显示已删除');
+      }
+    }
+  }
+
+  function applyUserCorrections(raw) {
+    userAddedBoxes = [];
+    deletedOriginalIds = [];
+    if (raw) {
+      try {
+        var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (data && Array.isArray(data.deleted_original_ids)) {
+          for (var i = 0; i < data.deleted_original_ids.length; i++) {
+            var id = parseInt(data.deleted_original_ids[i], 10);
+            if (!isNaN(id) && id >= 0 && id < originalBoxes.length && deletedOriginalIds.indexOf(id) === -1) {
+              deletedOriginalIds.push(id);
             }
-            var start = new Date(startStr).getTime() * 1000;
-            var end = new Date(endStr).getTime() * 1000;
-            doQuery(start, end);
+          }
         }
-
-        async function doQuery(startMicro, endMicro) {
-            var uuid = document.getElementById('uuid').value.trim();
-            var plateid = document.getElementById('plateid').value.trim();
-            if (!uuid) { showError('请输入设备 UUID'); return; }
-            if (!plateid) { showError('请输入盘位号'); return; }
-            hideError();
-            hideInfo();
-
-            document.getElementById('card-grid').innerHTML = '';
-            document.getElementById('loading-spinner').style.display = 'block';
-            document.getElementById('query-btn').disabled = true;
-
-            try {
-                var url = '/api/colony?uuid=' + encodeURIComponent(uuid) +
-                          '&plateid=' + encodeURIComponent(plateid) +
-                          '&start=' + startMicro + '&end=' + endMicro;
-                var resp = await fetch(url);
-                var data = await resp.json();
-
-                if (!data.success) {
-                    showError(data.message || '查询失败');
-                    return;
-                }
-
-                if (!data.colony || data.colony.length === 0) {
-                    showInfo('查询结果为空，请检查设备 UUID、盘位号和时间范围');
-                    return;
-                }
-
-                currentData = data.colony;
-                renderGrid(data.colony);
-            } catch (err) {
-                showError('请求失败: ' + err.message);
-            } finally {
-                document.getElementById('loading-spinner').style.display = 'none';
-                document.getElementById('query-btn').disabled = false;
+        if (data && Array.isArray(data.added_boxes)) {
+          for (var j = 0; j < data.added_boxes.length; j++) {
+            var b = normalizeBox(normalizeSavedUserBox(data.added_boxes[j]), 'user', -1);
+            if (b.x2 - b.x1 >= 1 && b.y2 - b.y1 >= 1) {
+              userAddedBoxes.push(b);
             }
+          }
         }
+      } catch (err) {
+        console.warn('Invalid saved user corrections:', err);
+      }
+    }
+    resetEditHistory();
+  }
 
-        async function renderGrid(colonyData) {
-            var grid = document.getElementById('card-grid');
-            grid.innerHTML = '';
+  function clearOverlays() {
+    var container = document.getElementById('img-container');
+    var oldOverlays = container.querySelectorAll('.box-overlay, .draw-overlay');
+    for (var k = 0; k < oldOverlays.length; k++) {
+      oldOverlays[k].remove();
+    }
+    var oldTooltip = container.querySelector('.box-tooltip');
+    if (oldTooltip) oldTooltip.remove();
+  }
 
-            var cards = [];
-            for (var i = 0; i < colonyData.length; i++) {
-                var item = colonyData[i];
-                var x = new Date(item.timestamp).getTime();
-                var timeStr = formatBeijingFull(x);
+  function scheduleRenderBoxes() {
+    if (!document.getElementById('modal').classList.contains('active')) return;
+    window.requestAnimationFrame(function() {
+      renderBoxes();
+    });
+  }
 
-                var card = document.createElement('div');
-                card.className = 'card';
-                card.dataset.index = i;
+  function resetResizeObserver() {
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
+    if (window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(scheduleRenderBoxes);
+      resizeObserver.observe(document.getElementById('img-container'));
+      resizeObserver.observe(document.getElementById('modal-img'));
+    }
+  }
 
-                var img = document.createElement('img');
-                img.className = 'card-thumb';
-                img.alt = timeStr;
-                card.appendChild(img);
+  function renderBoxes() {
+    clearOverlays();
+    if (!modalImageReady) return;
+    var container = document.getElementById('img-container');
+    var metrics = getImageMetrics();
+    var visibleBoxes = getDisplayBoxes();
 
-                var body = document.createElement('div');
-                body.className = 'card-body';
-                body.innerHTML = '<div class="time">' + timeStr + '</div>' +
-                                 '<div class="count">菌落数: ' + (item.number || 0) + '</div>';
-                card.appendChild(body);
+    var tooltip = document.createElement('div');
+    tooltip.className = 'box-tooltip';
+    tooltip.style.display = 'none';
+    container.appendChild(tooltip);
 
-                card.addEventListener('click', function(idx) {
-                    return function() { openModal(idx); };
-                }(i));
+    for (var i = 0; i < visibleBoxes.length; i++) {
+      var b = visibleBoxes[i];
+      var left = boxToDisplayX(b.x1, metrics);
+      var top = boxToDisplayY(b.y1, metrics);
+      var width = boxToDisplayX(b.x2, metrics) - left;
+      var height = boxToDisplayY(b.y2, metrics) - top;
 
-                grid.appendChild(card);
-                cards.push({card: card, img: img, item: item});
+      var overlay = document.createElement('div');
+      overlay.className = 'box-overlay';
+      if (b.source === 'user') overlay.classList.add('user-box');
+      if (b.source === 'deleted') overlay.classList.add('deleted-box');
+      if (b.conf >= 0.6) overlay.classList.add('high');
+      if (i === selectedBoxIndex) overlay.classList.add('selected');
+      overlay.style.left = left + 'px';
+      overlay.style.top = top + 'px';
+      overlay.style.width = width + 'px';
+      overlay.style.height = height + 'px';
+      overlay.dataset.boxIndex = i;
+
+      overlay.addEventListener('click', (function(idx) {
+        return function(e) {
+          e.stopPropagation();
+          if (editMode) {
+            selectedBoxIndex = (selectedBoxIndex === idx) ? -1 : idx;
+            renderBoxes();
+            updateBoxTable();
+          }
+        };
+      })(i));
+
+      overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf, source) {
+        return function(e) {
+          var label = source === 'user' ? '手动' : (source === 'deleted' ? '已删除' : (bconf * 100).toFixed(1) + '%');
+          tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + label;
+          tooltip.style.display = 'block';
+          positionTooltip(e, tooltip);
+        };
+      })(b.x1, b.y1, b.x2, b.y2, b.conf, b.source));
+
+      overlay.addEventListener('mousemove', function(e) {
+        tooltip.style.display = 'block';
+        positionTooltip(e, tooltip);
+      });
+
+      overlay.addEventListener('mouseleave', function() {
+        tooltip.style.display = 'none';
+      });
+
+      container.appendChild(overlay);
+    }
+  }
+
+  function updateBoxTable() {
+    var tbody = document.getElementById('box-tbody');
+    tbody.innerHTML = '';
+    var visibleBoxes = getVisibleBoxes();
+    var displayBoxes = getDisplayBoxes();
+    if (visibleBoxes.length === 0 && originalBoxes.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6">暂无识别框</td></tr>';
+      document.getElementById('modal-count').textContent = '菌落数: 0';
+      updateEditButtons();
+      return;
+    }
+    for (var i = 0; i < displayBoxes.length; i++) {
+      var b = displayBoxes[i];
+      var row = document.createElement('tr');
+      if (i === selectedBoxIndex) row.classList.add('selected-row');
+      if (b.source === 'deleted') row.classList.add('deleted-row');
+      row.innerHTML = '<td>' + b.x1.toFixed(1) + '</td><td>' + b.y1.toFixed(1) + '</td><td>' + b.x2.toFixed(1) + '</td><td>' + b.y2.toFixed(1) + '</td><td>' + (b.conf >= 0 ? (b.conf * 100).toFixed(1) + '%' : '手动') + '</td><td>' + (b.source === 'user' ? '手动' : (b.source === 'deleted' ? '已删除' : '自动')) + '</td>';
+      row.addEventListener('click', (function(idx) {
+        return function() {
+          selectedBoxIndex = (selectedBoxIndex === idx) ? -1 : idx;
+          renderBoxes();
+          updateBoxTable();
+        };
+      })(i));
+      tbody.appendChild(row);
+    }
+    if (deletedOriginalIds.length > 0) {
+      var deletedRow = document.createElement('tr');
+      deletedRow.className = 'deleted-row';
+      deletedRow.innerHTML = '<td colspan="6">已隐藏原始识别框: ' + deletedOriginalIds.length + ' 个。点击上方按钮可临时' + (showDeletedOriginals ? '隐藏' : '显示') + '。</td>';
+      tbody.appendChild(deletedRow);
+    }
+    document.getElementById('modal-count').textContent = '菌落数: ' + visibleBoxes.length;
+    updateEditButtons();
+  }
+
+  function showDeletedOriginalBoxes() {
+    if (deletedOriginalIds.length === 0) return;
+    showDeletedOriginals = !showDeletedOriginals;
+    selectedBoxIndex = -1;
+    renderBoxes();
+    updateBoxTable();
+  }
+
+  async function openModal(index) {
+    var item = currentData[index];
+    currentModalIndex = index;
+    var x = new Date(item.timestamp).getTime();
+    var timeStr = formatBeijingFull(x);
+
+    document.getElementById('modal-time').textContent = timeStr;
+    document.getElementById('modal-count').textContent = '菌落数: ' + (item.number || 0);
+    document.getElementById('modal-title').textContent = '菌落图像 (盘位 ' + currentPlateID + ')';
+
+    if (item.image && item.image.success && item.image.url) {
+      document.getElementById('download-img-btn').href = item.image.url;
+      document.getElementById('download-img-btn').style.display = '';
+    } else {
+      document.getElementById('download-img-btn').href = '#';
+      document.getElementById('download-img-btn').style.display = 'none';
+    }
+
+    if (item.record && item.record.success && item.record.url) {
+      document.getElementById('download-record-btn').classList.remove('hidden');
+    } else {
+      document.getElementById('download-record-btn').classList.add('hidden');
+    }
+
+    editMode = false;
+    modalImageReady = false;
+    selectedBoxIndex = -1;
+    originalBoxes = [];
+    userAddedBoxes = [];
+    deletedOriginalIds = [];
+    showDeletedOriginals = false;
+    boxCoordinateFrame = {width: 0, height: 0};
+    var editModeBtn = document.getElementById('edit-mode-btn');
+    editModeBtn.classList.remove('active');
+    editModeBtn.disabled = !(item.image && item.image.success && item.image.url);
+    document.getElementById('edit-hint').classList.add('hidden');
+    document.getElementById('delete-box-btn').classList.add('hidden');
+    document.getElementById('show-deleted-btn').classList.add('hidden');
+    document.getElementById('undo-btn').classList.add('hidden');
+    document.getElementById('redo-btn').classList.add('hidden');
+    document.getElementById('save-correction-btn').classList.add('hidden');
+    document.getElementById('clear-correction-btn').classList.add('hidden');
+    document.getElementById('download-corrected-btn').classList.add('hidden');
+    resetEditHistory();
+
+    // AI panel
+    var aiBody = document.getElementById('ai-panel-body');
+    var aiBtn = document.getElementById('ai-analyze-btn');
+    if (item.reply) {
+      aiBody.innerHTML = '<div class="ai-reply markdown-body">' + renderMarkdown(item.reply) + '</div>';
+      aiBtn.style.display = 'none';
+      document.getElementById('copy-ai-btn').classList.remove('hidden');
+    } else {
+      var hasImageContext = item.image && item.image.success && item.image.url;
+      aiBody.innerHTML = '<span class="ai-placeholder">' + (hasImageContext ? '暂无 AI 分析结果。点击"运行 AI 分析"生成。' : '图片不可用，无法运行 AI 分析。') + '</span>';
+      aiBtn.style.display = '';
+      aiBtn.disabled = !hasImageContext;
+      aiBtn.title = hasImageContext ? '' : '图片不可用，无法运行 AI 分析';
+      document.getElementById('copy-ai-btn').classList.add('hidden');
+    }
+
+    var tbody = document.getElementById('box-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" class="table-loading-cell"><div class="spinner"></div> 加载中...</td></tr>';
+
+    clearOverlays();
+
+    var img = document.getElementById('modal-img');
+    var imgLoader = document.getElementById('modal-img-loader');
+    var loadFired = false;
+    img.style.visibility = '';
+
+    var loadRecordData = function(shouldRenderBoxes) {
+      if (item.record && item.record.success && item.record.url) {
+        fetch(getRecordFetchURL(item))
+          .then(function(r) {
+            if (!r.ok) {
+              throw new Error('HTTP ' + r.status);
             }
-
-            for (var i = 0; i < cards.length; i++) {
-                var c = cards[i];
-                if (c.item.image && c.item.image.success && c.item.image.url) {
-                    c.img.src = c.item.image.url;
-                } else {
-                    c.img.alt = '图片不可用';
-                    c.img.style.objectFit = 'contain';
-                    c.img.style.padding = '20px';
-                }
+            return r.text();
+          })
+          .then(function(text) {
+            var parsedBoxes = [];
+            var raw = text.replace(/\r\n/g, '\n');
+            var lines = raw.split('\n');
+            for (var i = 0; i < lines.length; i++) {
+              var line = lines[i].trim();
+              if (line === '') continue;
+              var parts = line.split(/\s+/);
+              if (parts.length !== 5) continue;
+              var x1 = parseFloat(parts[0]);
+              var y1 = parseFloat(parts[1]);
+              var x2 = parseFloat(parts[2]);
+              var y2 = parseFloat(parts[3]);
+              var conf = parseFloat(parts[4]);
+              if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2) || isNaN(conf)) continue;
+              parsedBoxes.push({x1: x1, y1: y1, x2: x2, y2: y2, conf: conf});
             }
-        }
-
-        async function openModal(index) {
-            var item = currentData[index];
-            var x = new Date(item.timestamp).getTime();
-            var timeStr = formatBeijingFull(x);
-
-            document.getElementById('modal-time').textContent = timeStr;
-            document.getElementById('modal-count').textContent = '菌落数: ' + (item.number || 0);
-            document.getElementById('modal-title').textContent = '菌落图像 (盘位 ' + document.getElementById('plateid').value + ')';
-
-            if (item.image && item.image.success && item.image.url) {
-                document.getElementById('download-img-btn').href = item.image.url;
-                document.getElementById('download-img-btn').style.display = '';
+            updateBoxCoordinateFrame(parsedBoxes);
+            originalBoxes = [];
+            for (var j = 0; j < parsedBoxes.length; j++) {
+              originalBoxes.push(normalizeBox(parsedBoxes[j], 'auto', originalBoxes.length));
+            }
+            if (shouldRenderBoxes) {
+              applyUserCorrections(item.user_boxes);
+              renderBoxes();
             } else {
-                document.getElementById('download-img-btn').href = '#';
-                document.getElementById('download-img-btn').style.display = 'none';
+              resetEditHistory();
             }
-
-            if (item.record && item.record.success && item.record.url) {
-                document.getElementById('download-record-btn').href = item.record.url;
-                document.getElementById('download-record-btn').style.display = '';
-            } else {
-                document.getElementById('download-record-btn').href = '#';
-                document.getElementById('download-record-btn').style.display = 'none';
-            }
-
-            var container = document.getElementById('img-container');
-            var oldOverlays = container.querySelectorAll('.box-overlay');
-            for (var k = 0; k < oldOverlays.length; k++) {
-                oldOverlays[k].remove();
-            }
-            var oldTooltip = container.querySelector('.box-tooltip');
-            if (oldTooltip) oldTooltip.remove();
-
-            var img = document.getElementById('modal-img');
-            var tbody = document.getElementById('box-tbody');
-            tbody.innerHTML = '';
-
-            var tooltip = document.createElement('div');
-            tooltip.className = 'box-tooltip';
-            tooltip.style.display = 'none';
-            container.appendChild(tooltip);
-
-            img.onload = null;
-
-            var loadHandler = function() {
-                var oldBoxes = container.querySelectorAll('.box-overlay');
-                for (var kb = 0; kb < oldBoxes.length; kb++) {
-                    oldBoxes[kb].remove();
-                }
-
-                var displayW = img.clientWidth;
-                var displayH = img.clientHeight;
-                if (displayW === 0 || displayH === 0) return;
-                var scaleX = displayW / 640;
-                var scaleY = displayH / 640;
-
-                if (item.record && item.record.success && item.record.url) {
-                    fetch(item.record.url)
-                        .then(function(r) { return r.text(); })
-                        .then(function(text) {
-                            tbody.innerHTML = '';
-                            var raw = text.replace(/\r\n/g, '\n');
-                            var lines = raw.split('\n');
-                            for (var i = 0; i < lines.length; i++) {
-                                var line = lines[i].trim();
-                                if (line === '') continue;
-                                var parts = line.split(/\s+/);
-                                if (parts.length !== 5) continue;
-                                var x1 = parseFloat(parts[0]);
-                                var y1 = parseFloat(parts[1]);
-                                var x2 = parseFloat(parts[2]);
-                                var y2 = parseFloat(parts[3]);
-                                var conf = parseFloat(parts[4]);
-                                if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2) || isNaN(conf)) continue;
-
-                                var left = x1 * scaleX;
-                                var top = y1 * scaleY;
-                                var width = (x2 - x1) * scaleX;
-                                var height = (y2 - y1) * scaleY;
-
-                                var overlay = document.createElement('div');
-                                overlay.className = conf >= 0.6 ? 'box-overlay high' : 'box-overlay';
-                                overlay.style.left = left + 'px';
-                                overlay.style.top = top + 'px';
-                                overlay.style.width = width + 'px';
-                                overlay.style.height = height + 'px';
-
-                                overlay.addEventListener('mouseenter', (function(bx1, by1, bx2, by2, bconf) {
-                                    return function(e) {
-                                        tooltip.textContent = 'x1:' + bx1.toFixed(0) + ' y1:' + by1.toFixed(0) + ' x2:' + bx2.toFixed(0) + ' y2:' + by2.toFixed(0) + ' ' + (bconf * 100).toFixed(1) + '%';
-                                        tooltip.style.display = 'block';
-                                        positionTooltip(e, tooltip);
-                                    };
-                                })(x1, y1, x2, y2, conf));
-
-                                overlay.addEventListener('mousemove', function(e) {
-                                    tooltip.style.display = 'block';
-                                    positionTooltip(e, tooltip);
-                                });
-
-                                overlay.addEventListener('mouseleave', function() {
-                                    tooltip.style.display = 'none';
-                                });
-
-                                container.appendChild(overlay);
-
-                                var row = document.createElement('tr');
-                                row.innerHTML = '<td>' + x1.toFixed(1) + '</td><td>' + y1.toFixed(1) + '</td><td>' + x2.toFixed(1) + '</td><td>' + y2.toFixed(1) + '</td><td>' + (conf * 100).toFixed(1) + '%</td>';
-                                tbody.appendChild(row);
-                            }
-                        })
-                        .catch(function(err) {
-                            console.error('Failed to fetch record:', err);
-                            tbody.innerHTML = '<tr><td colspan="5">无法加载识别数据</td></tr>';
-                        });
-                }
-            };
-
-            img.onload = loadHandler;
-
-            if (item.image && item.image.success && item.image.url) {
-                img.src = item.image.url;
-                if (img.complete) {
-                    loadHandler();
-                }
-            } else {
-                img.src = '';
-                showError('图片不可用');
-                return;
-            }
-
-            document.getElementById('modal').classList.add('active');
+            updateBoxTable();
+          })
+          .catch(function(err) {
+            console.error('Failed to fetch record:', err);
+            document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">无法加载识别数据</td></tr>';
+          });
+      } else {
+        updateBoxCoordinateFrame([]);
+        if (shouldRenderBoxes) {
+          applyUserCorrections(item.user_boxes);
+          renderBoxes();
+        } else {
+          resetEditHistory();
         }
-
-        function positionTooltip(e, tooltip) {
-            var container = document.getElementById('img-container');
-            var rect = container.getBoundingClientRect();
-            var x = e.clientX - rect.left;
-            var y = e.clientY - rect.top;
-            tooltip.style.left = x + 'px';
-            tooltip.style.top = y + 'px';
+        updateBoxTable();
+        if (getVisibleBoxes().length === 0) {
+          document.getElementById('box-tbody').innerHTML = '<tr><td colspan="6">识别数据不可用</td></tr>';
         }
+      }
+    };
 
-        function closeModal() {
-            document.getElementById('modal').classList.remove('active');
+    var loadHandler = function() {
+      if (loadFired) return;
+      loadFired = true;
+      modalImageReady = true;
+
+      imgLoader.classList.add('loaded');
+      document.getElementById('img-container').classList.remove('image-loading');
+      img.style.visibility = '';
+
+      clearOverlays();
+      loadRecordData(true);
+    };
+
+    img.onload = null;
+    img.onerror = null;
+
+    document.getElementById('modal').classList.add('active');
+    resetResizeObserver();
+
+    if (item.image && item.image.success && item.image.url) {
+      document.getElementById('img-container').classList.add('image-loading');
+      imgLoader.classList.remove('loaded');
+      imgLoader.innerHTML = '<div class="spinner"></div>加载图片中...';
+      img.onload = loadHandler;
+      img.onerror = function() {
+        modalImageReady = false;
+        document.getElementById('edit-mode-btn').disabled = true;
+        if (!item.reply) {
+          aiBtn.disabled = true;
+          aiBtn.title = '图片加载失败，无法运行 AI 分析';
+          aiBody.innerHTML = '<span class="ai-placeholder">图片加载失败，无法运行 AI 分析。</span>';
         }
+        document.getElementById('img-container').classList.add('image-loading');
+        imgLoader.classList.remove('loaded');
+        imgLoader.innerHTML = '图片加载失败';
+        img.style.visibility = 'hidden';
+        loadRecordData(false);
+      };
+      img.src = item.image.url;
+      if (img.complete && img.naturalWidth > 0) {
+        loadHandler();
+      }
+    } else {
+      document.getElementById('img-container').classList.add('image-loading');
+      imgLoader.classList.remove('loaded');
+      imgLoader.innerHTML = '图片不可用';
+      img.style.visibility = 'hidden';
+      img.src = '';
+      loadRecordData(false);
+      showError('图片不可用');
+      return;
+    }
+  }
 
-        document.getElementById('modal').addEventListener('click', function(e) {
-            if (e.target === this) closeModal();
-        });
+  function toggleEditMode() {
+    if (!modalImageReady) {
+      showError('图片不可用，无法编辑识别框');
+      return;
+    }
+    editMode = !editMode;
+    var btn = document.getElementById('edit-mode-btn');
+    var hint = document.getElementById('edit-hint');
+    var delBtn = document.getElementById('delete-box-btn');
+    var showDeletedBtn = document.getElementById('show-deleted-btn');
+    var undoBtn = document.getElementById('undo-btn');
+    var redoBtn = document.getElementById('redo-btn');
+    var dlBtn = document.getElementById('download-corrected-btn');
+    var saveBtn = document.getElementById('save-correction-btn');
+    var clearBtn = document.getElementById('clear-correction-btn');
 
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closeModal();
-        });
+    if (editMode) {
+      btn.classList.add('active');
+      hint.classList.remove('hidden');
+      delBtn.classList.remove('hidden');
+      showDeletedBtn.classList.remove('hidden');
+      undoBtn.classList.remove('hidden');
+      redoBtn.classList.remove('hidden');
+      saveBtn.classList.remove('hidden');
+      clearBtn.classList.remove('hidden');
+      dlBtn.classList.remove('hidden');
+      enableDrawing();
+      updateEditButtons();
+    } else {
+      btn.classList.remove('active');
+      hint.classList.add('hidden');
+      delBtn.classList.add('hidden');
+      showDeletedBtn.classList.add('hidden');
+      undoBtn.classList.add('hidden');
+      redoBtn.classList.add('hidden');
+      saveBtn.classList.add('hidden');
+      clearBtn.classList.add('hidden');
+      dlBtn.classList.add('hidden');
+      selectedBoxIndex = -1;
+      renderBoxes();
+      updateBoxTable();
+      disableDrawing();
+    }
+  }
 
-        function showError(msg) {
-            var el = document.getElementById('error-message');
-            el.textContent = msg;
-            el.style.display = 'block';
+  function enableDrawing() {
+    var container = document.getElementById('img-container');
+    var img = document.getElementById('modal-img');
+    container.style.cursor = 'crosshair';
+    container.classList.add('editing');
+    img.draggable = false;
+    img.addEventListener('dragstart', preventDefaultDrag);
+    container.addEventListener('pointerdown', onDrawStart);
+    container.addEventListener('pointermove', onDrawMove);
+    container.addEventListener('pointerup', onDrawEnd);
+    container.addEventListener('pointercancel', cancelDrawing);
+    document.addEventListener('keydown', onKeyDown);
+  }
+
+  function disableDrawing() {
+    var container = document.getElementById('img-container');
+    var img = document.getElementById('modal-img');
+    container.style.cursor = '';
+    container.classList.remove('editing');
+    img.removeEventListener('dragstart', preventDefaultDrag);
+    container.removeEventListener('pointerdown', onDrawStart);
+    container.removeEventListener('pointermove', onDrawMove);
+    container.removeEventListener('pointerup', onDrawEnd);
+    container.removeEventListener('pointercancel', cancelDrawing);
+    document.removeEventListener('keydown', onKeyDown);
+    if (drawOverlay) { drawOverlay.remove(); drawOverlay = null; }
+    isDrawing = false;
+  }
+
+  function preventDefaultDrag(e) {
+    e.preventDefault();
+  }
+
+  function clampPointToImage(clientX, clientY) {
+    var container = document.getElementById('img-container');
+    var rect = container.getBoundingClientRect();
+    var metrics = getImageMetrics();
+    var x = clientX - rect.left;
+    var y = clientY - rect.top;
+    return {
+      x: Math.max(metrics.offsetX, Math.min(metrics.offsetX + metrics.displayW, x)),
+      y: Math.max(metrics.offsetY, Math.min(metrics.offsetY + metrics.displayH, y))
+    };
+  }
+
+  function isPointInsideImage(clientX, clientY) {
+    var container = document.getElementById('img-container');
+    var rect = container.getBoundingClientRect();
+    var metrics = getImageMetrics();
+    var x = clientX - rect.left;
+    var y = clientY - rect.top;
+    return x >= metrics.offsetX && x <= metrics.offsetX + metrics.displayW &&
+      y >= metrics.offsetY && y <= metrics.offsetY + metrics.displayH;
+  }
+
+  function onDrawStart(e) {
+    if (!editMode) return;
+    if (e.target.classList.contains('box-overlay')) return;
+    e.preventDefault();
+    var container = document.getElementById('img-container');
+    var img = document.getElementById('modal-img');
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    if (!isPointInsideImage(e.clientX, e.clientY)) return;
+    var point = clampPointToImage(e.clientX, e.clientY);
+    isDrawing = true;
+    drawStart = point;
+    if (container.setPointerCapture) {
+      container.setPointerCapture(e.pointerId);
+    }
+    drawOverlay = document.createElement('div');
+    drawOverlay.className = 'box-overlay drawing';
+    drawOverlay.style.left = drawStart.x + 'px';
+    drawOverlay.style.top = drawStart.y + 'px';
+    drawOverlay.style.width = '0px';
+    drawOverlay.style.height = '0px';
+    container.appendChild(drawOverlay);
+  }
+
+  function onDrawMove(e) {
+    if (!isDrawing || !drawOverlay) return;
+    e.preventDefault();
+    var cur = clampPointToImage(e.clientX, e.clientY);
+    var curX = cur.x;
+    var curY = cur.y;
+    var left = Math.min(drawStart.x, curX);
+    var top = Math.min(drawStart.y, curY);
+    var width = Math.abs(curX - drawStart.x);
+    var height = Math.abs(curY - drawStart.y);
+    drawOverlay.style.left = left + 'px';
+    drawOverlay.style.top = top + 'px';
+    drawOverlay.style.width = width + 'px';
+    drawOverlay.style.height = height + 'px';
+  }
+
+  function onDrawEnd(e) {
+    if (!isDrawing || !drawOverlay) return;
+    e.preventDefault();
+    isDrawing = false;
+    var container = document.getElementById('img-container');
+    if (container.hasPointerCapture && container.hasPointerCapture(e.pointerId)) {
+      container.releasePointerCapture(e.pointerId);
+    }
+    var metrics = getImageMetrics();
+
+    var left = parseFloat(drawOverlay.style.left);
+    var top = parseFloat(drawOverlay.style.top);
+    var width = parseFloat(drawOverlay.style.width);
+    var height = parseFloat(drawOverlay.style.height);
+
+    drawOverlay.remove();
+    drawOverlay = null;
+
+    if (width < 5 || height < 5) return;
+
+    var x1 = displayToBoxX(left, metrics);
+    var y1 = displayToBoxY(top, metrics);
+    var x2 = displayToBoxX(left + width, metrics);
+    var y2 = displayToBoxY(top + height, metrics);
+
+    recordEditState();
+    userAddedBoxes.push(normalizeBox({x1: x1, y1: y1, x2: x2, y2: y2, conf: MANUAL_BOX_CONFIDENCE}, 'user', -1));
+    selectedBoxIndex = getDisplayBoxes().length - 1;
+    renderBoxes();
+    updateBoxTable();
+  }
+
+  function cancelDrawing(e) {
+    if (e) e.preventDefault();
+    if (drawOverlay) { drawOverlay.remove(); drawOverlay = null; }
+    isDrawing = false;
+  }
+
+  function onKeyDown(e) {
+    if (!editMode) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        redoCorrectionEdit();
+      } else {
+        undoCorrectionEdit();
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      redoCorrectionEdit();
+      return;
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (selectedBoxIndex >= 0 && selectedBoxIndex < getVisibleBoxes().length) {
+        e.preventDefault();
+        deleteSelectedBox();
+      }
+    }
+  }
+
+  function deleteSelectedBox() {
+    var displayBoxes = getDisplayBoxes();
+    if (selectedBoxIndex < 0 || selectedBoxIndex >= displayBoxes.length) return;
+    var selected = displayBoxes[selectedBoxIndex];
+    if (selected.source === 'deleted') return;
+    recordEditState();
+    if (selected.source === 'user') {
+      userAddedBoxes.splice(selected.userIndex, 1);
+    } else if (selected.source === 'auto' && deletedOriginalIds.indexOf(selected.originalIndex) === -1) {
+      deletedOriginalIds.push(selected.originalIndex);
+    }
+    selectedBoxIndex = -1;
+    renderBoxes();
+    updateBoxTable();
+  }
+
+  function downloadRecordCSV() {
+    if (currentModalIndex < 0) return;
+    var item = currentData[currentModalIndex];
+    if (!item.record || !item.record.success || !item.record.url) return;
+
+    var btn = document.getElementById('download-record-btn');
+    var prevText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div> 下载中...';
+
+    fetch(getRecordFetchURL(item))
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function(text) {
+        var lines = [];
+        lines.push('\uFEFFx1,y1,x2,y2,confidence');
+        var raw = text.replace(/\r\n/g, '\n');
+        var parts = raw.split('\n');
+        for (var i = 0; i < parts.length; i++) {
+          var line = parts[i].trim();
+          if (line === '') continue;
+          var cols = line.split(/\s+/);
+          if (cols.length !== 5) continue;
+          lines.push(cols.join(','));
         }
+        var csv = lines.join('\n');
+        var blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'record_' + currentUUID + '_plate' + currentPlateID + '_' + currentModalIndex + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(function(err) {
+        showError('下载记录失败: ' + err.message);
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = prevText;
+      });
+  }
 
-        function hideError() {
-            document.getElementById('error-message').style.display = 'none';
-        }
+  function getRecordFetchURL(item) {
+    if (item.record && item.record.key) {
+      return '/api/colony/record?key=' + encodeURIComponent(item.record.key);
+    }
+    return item.record.url;
+  }
 
-        function showInfo(msg) {
-            var el = document.getElementById('info-message');
-            el.textContent = msg;
-            el.style.display = 'block';
-        }
+  function downloadCorrectedRecord() {
+    var visibleBoxes = getVisibleBoxes();
+    if (visibleBoxes.length === 0) return;
+    var lines = [];
+    for (var i = 0; i < visibleBoxes.length; i++) {
+      var b = visibleBoxes[i];
+      var conf = b.source === 'user' ? '-0.00' : (b.conf >= 0 ? b.conf.toFixed(2) : '0.00');
+      lines.push(b.x1.toFixed(1) + ' ' + b.y1.toFixed(1) + ' ' + b.x2.toFixed(1) + ' ' + b.y2.toFixed(1) + ' ' + conf);
+    }
+    var text = lines.join('\n');
+    var blob = new Blob([text], {type: 'text/plain'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'corrected_record.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
-        function hideInfo() {
-            document.getElementById('info-message').style.display = 'none';
-        }
+  async function saveCorrections() {
+    if (currentModalIndex < 0) return;
+    var item = currentData[currentModalIndex];
+    var btn = document.getElementById('save-correction-btn');
+    var previousHtml = btn.innerHTML;
+    var correction = serializeUserCorrections();
+    btn.disabled = true;
+    btn.textContent = '保存中...';
 
-        window.addEventListener('DOMContentLoaded', function() {
-            var now = new Date();
-            document.getElementById('end-time').value = formatDatetimeLocal(now);
-            document.getElementById('start-time').value = formatDatetimeLocal(new Date(now.getTime() - 3600000));
-        });
-    </script>
+    try {
+      await postCorrections(item, correction, '保存用户修正失败');
+      item.user_boxes = JSON.stringify(correction);
+      showInfo('用户修正已保存，原始识别数据未被修改');
+    } catch (err) {
+      showError('保存用户修正失败: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = previousHtml;
+    }
+  }
+
+  async function clearCorrections() {
+    if (currentModalIndex < 0) return;
+    if (!confirm('确定要清空当前图片的所有手动修正吗？这会恢复所有原始识别框，并删除手动新增框。')) return;
+
+    var item = currentData[currentModalIndex];
+    var btn = document.getElementById('clear-correction-btn');
+    var previousHtml = btn.innerHTML;
+    var previousUserBoxes = userAddedBoxes.slice();
+    var previousDeletedIds = deletedOriginalIds.slice();
+    var correction;
+
+    recordEditState();
+    userAddedBoxes = [];
+    deletedOriginalIds = [];
+    selectedBoxIndex = -1;
+    correction = serializeUserCorrections();
+    renderBoxes();
+    updateBoxTable();
+
+    btn.disabled = true;
+    btn.textContent = '清空中...';
+    try {
+      await postCorrections(item, correction, '清空用户修正失败');
+      item.user_boxes = JSON.stringify(correction);
+      showInfo('用户修正已清空，已恢复原始识别结果');
+    } catch (err) {
+      userAddedBoxes = previousUserBoxes;
+      deletedOriginalIds = previousDeletedIds;
+      if (undoStack.length > 0) undoStack.pop();
+      redoStack = [];
+      renderBoxes();
+      updateBoxTable();
+      showError('清空用户修正失败: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = previousHtml;
+    }
+  }
+
+  async function postCorrections(item, correction, errorPrefix) {
+    var resp = await fetch('/api/colony/correction', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        uuid: currentUUID,
+        plateid: parseInt(currentPlateID, 10),
+        timestamp: formatStoredTimestamp(item.timestamp),
+        user_boxes: correction
+      })
+    });
+    var data = await resp.json();
+    if (!data.success) {
+      throw new Error(data.message || errorPrefix);
+    }
+  }
+
+  async function runAnalyze() {
+    if (currentModalIndex < 0) return;
+    var item = currentData[currentModalIndex];
+    if (!item.image || !item.image.success || !item.image.url) {
+      document.getElementById('ai-panel-body').innerHTML = '<span class="ai-error">图片不可用，无法运行 AI 分析。</span>';
+      return;
+    }
+    var uuid = document.getElementById('uuid').value.trim();
+    var plateid = parseInt(currentPlateID, 10);
+    var timestamp = formatStoredTimestamp(item.timestamp);
+
+    var btn = document.getElementById('ai-analyze-btn');
+    var body = document.getElementById('ai-panel-body');
+    btn.disabled = true;
+    btn.textContent = '分析中...';
+    body.innerHTML = '<div class="ai-loading"><div class="spinner"></div>AI 分析中，请稍候...</div>';
+
+    try {
+      var resp = await fetch('/api/colony/analyze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({uuid: uuid, plateid: plateid, timestamp: timestamp})
+      });
+      var data = await resp.json();
+      if (data.success && data.reply) {
+        body.innerHTML = '<div class="ai-reply markdown-body">' + renderMarkdown(data.reply) + '</div>';
+        item.reply = data.reply;
+        btn.style.display = 'none';
+        document.getElementById('copy-ai-btn').classList.remove('hidden');
+      } else {
+        body.innerHTML = '<span class="ai-error">分析失败：' + escapeHtml(data.message || '未知错误') + '</span>';
+      }
+    } catch (err) {
+      body.innerHTML = '<span class="ai-error">请求失败：' + escapeHtml(err.message) + '</span>';
+    } finally {
+      btn.disabled = !(item.image && item.image.success && item.image.url);
+      btn.textContent = '运行 AI 分析';
+    }
+  }
+
+  function copyAIAnalysis() {
+    if (currentModalIndex < 0) return;
+    var text = currentData[currentModalIndex].reply;
+    if (!text) return;
+    var btn = document.getElementById('copy-ai-btn');
+    navigator.clipboard.writeText(text).then(function() {
+      btn.textContent = '已复制';
+      setTimeout(function() { btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> 复制'; }, 1500);
+    });
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML.replace(/\n/g, '<br>');
+  }
+
+  function renderMarkdown(text) {
+    if (!text) return '';
+    var s = text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+    s = s.replace(/[ \t]*\n[ \t]*\n[ \t]*(?:\n[ \t]*)+/g, '\n\n');
+    return marked.parse(s.trim());
+  }
+
+  function formatStoredTimestamp(timestamp) {
+    var d = utcMsToBeijing(new Date(timestamp).getTime());
+    return d.getUTCFullYear() +
+      pad2(d.getUTCMonth() + 1) +
+      pad2(d.getUTCDate()) + '-' +
+      pad2(d.getUTCHours()) +
+      pad2(d.getUTCMinutes()) +
+      pad2(d.getUTCSeconds());
+  }
+
+  function positionTooltip(e, tooltip) {
+    var container = document.getElementById('img-container');
+    var rect = container.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('active');
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
+    if (editMode) {
+      editMode = false;
+      disableDrawing();
+    }
+  }
+
+  document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  window.addEventListener('resize', scheduleRenderBoxes);
+
+  window.addEventListener('DOMContentLoaded', initTimeDefaults);
+</script>
 </body>
 </html>

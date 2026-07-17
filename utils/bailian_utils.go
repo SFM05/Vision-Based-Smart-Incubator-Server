@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -48,9 +47,7 @@ func BailianInference(img_path string, model_name string) (string, string) {
 		return "", ""
 	}
 
-	// 创建 HTTP 客户端
 	client := &http.Client{}
-	// 构建请求体
 	requestBody := ChatRequest{
 		Model: model_name,
 		Messages: []ChatMessage{
@@ -65,7 +62,7 @@ func BailianInference(img_path string, model_name string) (string, string) {
 					},
 					{
 						Type: "text",
-						Text: "你现在是一个微生物领域的专家。请你根据菌落的形状、边缘、表面质地、颜色等维度，判断这张图片中是否有杂菌。在回复的开始按“污染可能性：低/中/高\\n”回复，并陈述你的理由。",
+						Text: "你现在是一个微生物领域的专家。请你根据菌落的形状、边缘、表面质地、颜色等维度，判断这张图片中是否有杂菌。在回复的开始按\u201c污染可能性：低/中/高\\n\u201d回复，并陈述你的理由。",
 					},
 				},
 			},
@@ -77,21 +74,22 @@ func BailianInference(img_path string, model_name string) (string, string) {
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Fail to construct request body: %v", err))
+		return "", ""
 	}
 
-	// 创建 POST 请求
 	req, err := http.NewRequest("POST", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(fmt.Sprintf("Fail to create request: %v", err))
+		return "", ""
 	}
-	// 设置请求头
 	apiKey := os.Getenv("DASHSCOPE_API_KEY")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	// 发送请求
+
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Send request failed: %v", err))
+		return "", ""
 	}
 	defer resp.Body.Close()
 
@@ -148,7 +146,6 @@ func BailianInference(img_path string, model_name string) (string, string) {
 }
 
 func UploadSucess(uuid string, timestamp time.Time, plateid int) {
-	// 生成图片的预签名URL
 	img_path := uuid + "/" +
 		strconv.Itoa(plateid) + "/" +
 		timestamp.Format("20060102-150405") + ".bmp"
@@ -160,16 +157,16 @@ func UploadSucess(uuid string, timestamp time.Time, plateid int) {
 	table_name := os.Getenv("COLONY_TABLE_NAME")
 	measurement_name := os.Getenv("COLONY_MEASURE_NAME")
 
-	// 构造待查询时间线的 timeseriesKey。
 	timeseriesKey := tablestore.NewTimeseriesKey()
 	timeseriesKey.SetMeasurementName(measurement_name)
 	timeseriesKey.SetDataSource(uuid)
 	timeseriesKey.AddTag("plate_id", strconv.Itoa(plateid))
 
-	// 构造查询请求。
+	// Use truncated timestamp to match write path
+	truncatedUs := timestamp.UnixMicro() / 1e6 * 1e6
 	getTimeseriesDataRequest := tablestore.NewGetTimeseriesDataRequest(table_name)
 	getTimeseriesDataRequest.SetTimeseriesKey(timeseriesKey)
-	getTimeseriesDataRequest.SetTimeRange(timestamp.UnixMicro(), timestamp.UnixMicro()+1) // 指定查询时间范围。
+	getTimeseriesDataRequest.SetTimeRange(truncatedUs, truncatedUs+1)
 	getTimeseriesDataRequest.SetLimit(-1)
 
 	getTimeseriesResp, err := client.GetTimeseriesData(getTimeseriesDataRequest)
@@ -179,28 +176,23 @@ func UploadSucess(uuid string, timestamp time.Time, plateid int) {
 	}
 
 	for i := 0; i < len(getTimeseriesResp.GetRows()); i++ {
-		if getTimeseriesResp.GetRows()[i].GetTimeInus() == timestamp.UnixMicro() {
+		if getTimeseriesResp.GetRows()[i].GetTimeInus() == truncatedUs {
 			rows := getTimeseriesResp.GetRows()[i].GetFieldsMap()
 
-			// 构造时序数据行 timeseriesRow。
-			// timeseriesKey 标识时间线：度量名称、数据源主机和标签。
 			timeseriesKey := tablestore.NewTimeseriesKey()
 			timeseriesKey.SetMeasurementName(measurement_name)
 			timeseriesKey.SetDataSource(uuid)
 			timeseriesKey.AddTag("plate_id", strconv.Itoa(plateid))
 
-			// timeseriesRow 在 timeseriesKey 的基础上关联时间戳和字段值。
 			timeseriesRow := tablestore.NewTimeseriesRow(timeseriesKey)
-			timeseriesRow.SetTimeInus(timestamp.UnixMicro())
+			timeseriesRow.SetTimeInus(truncatedUs)
 
-			// 把原来的数据写入
 			for key, value := range rows {
 				timeseriesRow.AddField(key, value)
 			}
 			timeseriesRow.AddField("reply",
 				tablestore.NewColumnValue(tablestore.ColumnType_STRING, content))
 
-			// 构造写入时序数据的请求。
 			putTimeseriesDataRequest := tablestore.NewPutTimeseriesDataRequest(table_name)
 			putTimeseriesDataRequest.AddTimeseriesRows(timeseriesRow)
 

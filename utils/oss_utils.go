@@ -24,46 +24,35 @@ var (
 	ErrObjectNameRequired = errors.New("object name is required")
 )
 
-// 文件是否存在
-func Existed(object_name string) bool {
-
+// Existed 检查文件是否存在，返回 (exists, error)
+func Existed(object_name string) (bool, error) {
 	region := os.Getenv("REGION")
 	bucket_name := os.Getenv("BUCKET_NAME")
 
-	// 加载默认配置并设置凭证提供者和区域
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
 		WithRegion(region)
 
-	// 创建OSS客户端
 	client := oss.NewClient(cfg)
 
 	existed, err := client.IsObjectExist(context.TODO(), bucket_name, object_name)
 	if err != nil {
-		return false
-	} else {
-		if existed {
-			return true
-		} else {
-			return false
-		}
+		return false, err
 	}
+	return existed, nil
 }
 
-// SignURL 生成预签名上传URL
+// signUploadURL 生成预签名上传URL
 func signUploadURL(object_name string, expire_time time.Duration) (string, error) {
 	region := os.Getenv("REGION")
 	bucket_name := os.Getenv("BUCKET_NAME")
 
-	// 加载默认配置并设置凭证提供者和区域
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
 		WithRegion(region)
 
-	// 创建OSS客户端
 	client := oss.NewClient(cfg)
 
-	// 生成PutObject的预签名URL
 	result, err := client.Presign(context.TODO(), &oss.PutObjectRequest{
 		Bucket: oss.Ptr(bucket_name),
 		Key:    oss.Ptr(object_name),
@@ -81,15 +70,12 @@ func signDownloadURL(object_name string, expire_time time.Duration) (string, err
 	region := os.Getenv("REGION")
 	bucket_name := os.Getenv("BUCKET_NAME")
 
-	// 加载默认配置并设置凭证提供者和区域
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
 		WithRegion(region)
 
-	// 创建OSS客户端
 	client := oss.NewClient(cfg)
 
-	// 生成GetObject的预签名URL
 	result, err := client.Presign(context.TODO(), &oss.GetObjectRequest{
 		Bucket: oss.Ptr(bucket_name),
 		Key:    oss.Ptr(object_name),
@@ -118,7 +104,7 @@ func uploadMessage(client MQTT.Client,
 		Success   bool   `json:"success"`
 		Path      string `json:"path"`
 		ImgURL    string `json:"url"`
-	}{timestamp.Format("2006-01-02 15:04:05"), status, path, url}
+	}{timestamp.Format("20060102-150405"), status, path, url}
 
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
@@ -127,9 +113,12 @@ func uploadMessage(client MQTT.Client,
 
 	token := client.Publish(topic, byte(qos), retained, buffer.Bytes())
 	token.Wait()
+	if token.Error() != nil {
+		slog.Error(fmt.Sprintf("Failed to publish upload reply: %v", token.Error()))
+	}
 }
 
-// Upload 回调函数，处理来自mcu的上传请求
+// OnUploadRequest 回调函数，处理来自mcu的上传请求
 func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 	// {"timestamp":string, "plateid":int, "imgpath":string, "txtpath":string, "number":int}
 	var json_result struct {
@@ -146,66 +135,117 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 		return
 	}
 
-	// 解析时间
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc := loadLocation()
 	timestamp, err := time.ParseInLocation("20060102-150405", json_result.Timestamp, loc)
 	if err != nil {
-		// 解析时间失败时使用服务器时间作为替代
 		slog.Warn(fmt.Sprintf("Time parse fail: %v", err))
 		slog.Warn(fmt.Sprintf("    Original time: %s", json_result.Timestamp))
 		slog.Warn("Using server time instead")
 		timestamp = time.Now().In(loc)
 	}
 
-	// 生成图片的预签名URL
 	img_path := uuid + "/" +
 		strconv.Itoa(json_result.PlateID) + "/" +
 		timestamp.Format("20060102-150405") + ".bmp"
-	img_url, err := signUploadURL(img_path, 10*time.Minute)
-	if err != nil {
-		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))
-		return
-	}
-	uploadMessage(client, uuid, timestamp, true, json_result.ImgPath, img_url)
-
-	// 生成文本记录的预签名URL
 	txt_path := uuid + "/" +
 		strconv.Itoa(json_result.PlateID) + "/" +
 		timestamp.Format("20060102-150405") + ".txt"
-	txt_url, err := signUploadURL(txt_path, 10*time.Minute)
+
+	// Generate both presign URLs before publishing either
+	img_url, err := signUploadURL(img_path, 10*time.Minute)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Sign URL failed: %v", err))
+		slog.Error(fmt.Sprintf("Sign image URL failed: %v", err))
+		uploadMessage(client, uuid, timestamp, false, json_result.ImgPath, "")
 		return
 	}
-	uploadMessage(client, uuid, timestamp, true, json_result.TxtPath, txt_url)
+	txt_url, err := signUploadURL(txt_path, 10*time.Minute)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Sign text URL failed: %v", err))
+		uploadMessage(client, uuid, timestamp, false, json_result.TxtPath, "")
+		return
+	}
 
-	// 上报文件路径和数量
-	RecordColonyData(uuid,
-		json_result.PlateID,
-		timestamp,
-		img_path,
-		txt_path,
-		json_result.Number)
+	// Both URLs signed successfully, publish both replies
+	uploadMessage(client, uuid, timestamp, true, json_result.ImgPath, img_url)
+	uploadMessage(client, uuid, timestamp, true, json_result.TxtPath, txt_url)
 
 	slog.Info("Publish upload reply success")
 
+	// Do not create a queryable record until both uploaded objects are present.
+	recordColonyData := func() {
+		RecordColonyData(uuid,
+			json_result.PlateID,
+			timestamp,
+			img_path,
+			txt_path,
+			json_result.Number)
+	}
+
+	// Poll OSS for both files with proper error handling
+	imgExists := false
+	txtExists := false
+
 	time.Sleep(60 * time.Second)
-	if Existed(img_path) {
-		slog.Info(fmt.Sprintf("File upload secess after 60s: %s", img_path))
-		// UploadSucess(uuid, timestamp, json_result.PlateID)
+	imgExists, imgErr := Existed(img_path)
+	if imgErr != nil {
+		slog.Warn(fmt.Sprintf("Error checking image after 60s: %v", imgErr))
+	} else if imgExists {
+		slog.Info(fmt.Sprintf("File upload success after 60s: %s", img_path))
+	}
+	txtExists, txtErr := Existed(txt_path)
+	if txtErr != nil {
+		slog.Warn(fmt.Sprintf("Error checking text after 60s: %v", txtErr))
+	} else if txtExists {
+		slog.Info(fmt.Sprintf("File upload success after 60s: %s", txt_path))
+	}
+	if imgExists && txtExists {
+		recordColonyData()
 		return
 	}
+
 	time.Sleep(60 * time.Second)
-	if Existed(img_path) {
-		slog.Info(fmt.Sprintf("File upload secess after 120s: %s", img_path))
-		// UploadSucess(uuid, timestamp, json_result.PlateID)
+	if !imgExists {
+		imgExists, imgErr = Existed(img_path)
+		if imgErr != nil {
+			slog.Warn(fmt.Sprintf("Error checking image after 120s: %v", imgErr))
+		} else if imgExists {
+			slog.Info(fmt.Sprintf("File upload success after 120s: %s", img_path))
+		}
+	}
+	if !txtExists {
+		txtExists, txtErr = Existed(txt_path)
+		if txtErr != nil {
+			slog.Warn(fmt.Sprintf("Error checking text after 120s: %v", txtErr))
+		} else if txtExists {
+			slog.Info(fmt.Sprintf("File upload success after 120s: %s", txt_path))
+		}
+	}
+	if imgExists && txtExists {
+		recordColonyData()
 		return
 	}
+
 	time.Sleep(480 * time.Second)
-	if Existed(img_path) {
-		slog.Info(fmt.Sprintf("File upload secess after 600s: %s", img_path))
-		// UploadSucess(uuid, timestamp, json_result.PlateID)
+	if !imgExists {
+		imgExists, imgErr = Existed(img_path)
+		if imgErr != nil {
+			slog.Warn(fmt.Sprintf("Error checking image after 600s: %v", imgErr))
+		} else if imgExists {
+			slog.Info(fmt.Sprintf("File upload success after 600s: %s", img_path))
+		}
+	}
+	if !txtExists {
+		txtExists, txtErr = Existed(txt_path)
+		if txtErr != nil {
+			slog.Warn(fmt.Sprintf("Error checking text after 600s: %v", txtErr))
+		} else if txtExists {
+			slog.Info(fmt.Sprintf("File upload success after 600s: %s", txt_path))
+		}
+	}
+	if imgExists && txtExists {
+		recordColonyData()
 		return
 	}
-	slog.Info(fmt.Sprintf("Fail to receive file: %s", img_path))
+
+	slog.Info(fmt.Sprintf("Fail to receive files: img=%s (exists=%v), txt=%s (exists=%v)", img_path, imgExists, txt_path, txtExists))
 }
