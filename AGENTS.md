@@ -11,6 +11,9 @@ Go middleware server for a vision-based smart incubator. Connects MCU devices vi
 go build -o bin/listener ./cmd/server/
 go build -o bin/web ./cmd/web/
 
+# Run OSS backup (downloads all objects to oss-download/ by default)
+go run ./cmd/oss-download
+
 # Run MQTT listener (requires env vars)
 ./bin/listener
 
@@ -38,6 +41,8 @@ Two separate `main` packages — not a single entrypoint:
 
 - `cmd/web/web.go` — HTTP server on `:8182` by default (`WEB_PORT` overrides). Serves static files from `static/` and exposes `/api/env` and `/api/colony` JSON endpoints.
 
+- `cmd/oss-download/main.go` — OSS backup command. Lists all bucket objects with pagination and downloads them into `oss-download/` by default while preserving object-key paths. An optional positional argument overrides the destination.
+
 - `utils/` — Business logic: OSS presigning, Tablestore read/write, Bailian (Alibaba Cloud AI) inference.
 
 - `web/` — Query functions `GetEnv()` and `GetColony()` called by the web handler.
@@ -57,6 +62,7 @@ Two separate `main` packages — not a single entrypoint:
 - **Web static dir:** Served relative to CWD (`http.Dir("static")`), so web binary must be run from repo root.
 - **Logging inconsistency:** `cmd/web/web.go` uses `log` (stdlib), while `utils/` and `cmd/server/` use `log/slog`. Don't introduce a third pattern.
 - **`.env` is gitignored.** Never commit it. `.env.example` is the committed template.
+- **OSS backup output:** `oss-download/` is gitignored. The downloader uses temporary `.partial` files and renames each after a successful download.
 
 ## Conventions
 

@@ -85,6 +85,20 @@ chmod +x start.sh
 
 浏览器访问 `http://localhost:8182` 查看仪表板。
 
+### 备份 OSS 文件
+
+从 `.env` 读取 OSS 凭据，下载 bucket 中的全部对象，并保留 OSS key 的目录结构：
+
+```bash
+go run ./cmd/oss-download
+```
+
+默认下载到项目根目录的 `oss-download/`（已 gitignore）。可传入目标目录：
+
+```bash
+go run ./cmd/oss-download path/to/backup
+```
+
 ## 环境变量
 
 所有配置通过环境变量注入。
@@ -196,7 +210,8 @@ GET /api/colony?uuid=<设备UUID>&plateid=<盘位号>&start=<起始微秒>&end=<
 ```
 ├── cmd/
 │   ├── server/listener.go    # 生产 MQTT 订阅者（main 入口）
-│   └── web/web.go            # Web 服务器（main 入口）
+│   ├── web/web.go            # Web 服务器（main 入口）
+│   └── oss-download/main.go  # 下载 OSS 全部对象的备份工具
 ├── static/
 │   ├── env.html              # 环境数据仪表板（Chart.js 折线图）
 │   ├── colony.html           # 菌落图像查看器（缩略图 + 边界框叠加）
