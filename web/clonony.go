@@ -43,6 +43,18 @@ func getFileMetaData(object_name string, expire_time time.Duration) FileMetaData
 		return data
 	}
 
+	exists, err := getOSSClient().IsObjectExist(context.TODO(), bucket_name, object_name)
+	if err != nil {
+		data.Success = false
+		data.Message = err.Error()
+		return data
+	}
+	if !exists {
+		data.Success = false
+		data.Message = "object not found"
+		return data
+	}
+
 	result, err := getOSSClient().Presign(context.TODO(), &oss.GetObjectRequest{
 		Bucket: oss.Ptr(bucket_name),
 		Key:    oss.Ptr(object_name),

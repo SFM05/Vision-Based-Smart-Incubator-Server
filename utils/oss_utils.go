@@ -171,13 +171,15 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 
 	slog.Info("Publish upload reply success")
 
-	// Record colony data after successful presign replies
-	RecordColonyData(uuid,
-		json_result.PlateID,
-		timestamp,
-		img_path,
-		txt_path,
-		json_result.Number)
+	// Do not create a queryable record until both uploaded objects are present.
+	recordColonyData := func() {
+		RecordColonyData(uuid,
+			json_result.PlateID,
+			timestamp,
+			img_path,
+			txt_path,
+			json_result.Number)
+	}
 
 	// Poll OSS for both files with proper error handling
 	imgExists := false
@@ -197,6 +199,7 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 		slog.Info(fmt.Sprintf("File upload success after 60s: %s", txt_path))
 	}
 	if imgExists && txtExists {
+		recordColonyData()
 		return
 	}
 
@@ -218,6 +221,7 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 		}
 	}
 	if imgExists && txtExists {
+		recordColonyData()
 		return
 	}
 
@@ -239,6 +243,7 @@ func OnUploadRequest(client MQTT.Client, uuid string, payload string) {
 		}
 	}
 	if imgExists && txtExists {
+		recordColonyData()
 		return
 	}
 

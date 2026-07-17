@@ -366,7 +366,8 @@
         if (c.img.complete && c.img.naturalWidth > 0) { c.loader.classList.add('loaded'); }
       } else {
         c.loader.innerHTML = '图片不可用';
-        c.img.alt = '图片不可用';
+        c.img.alt = '';
+        c.img.style.visibility = 'hidden';
         c.img.style.objectFit = 'contain';
         c.img.style.padding = '24px';
         c.img.style.background = 'var(--border-light)';
