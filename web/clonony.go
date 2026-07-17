@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strconv"
@@ -19,6 +20,7 @@ type FileMetaData struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
 	URL     string `json:"url,omitempty"`
+	Key     string `json:"key,omitempty"`
 }
 type ColonyMetaData struct {
 	Timestamp string       `json:"timestamp"`
@@ -42,6 +44,7 @@ func getFileMetaData(object_name string, expire_time time.Duration) FileMetaData
 		data.Message = "empty object name"
 		return data
 	}
+	data.Key = object_name
 
 	exists, err := getOSSClient().IsObjectExist(context.TODO(), bucket_name, object_name)
 	if err != nil {
@@ -69,6 +72,24 @@ func getFileMetaData(object_name string, expire_time time.Duration) FileMetaData
 	data.Success = true
 	data.URL = result.URL
 	return data
+}
+
+func GetRecordText(objectName string) (string, error) {
+	bucketName := os.Getenv("BUCKET_NAME")
+	result, err := getOSSClient().GetObject(context.TODO(), &oss.GetObjectRequest{
+		Bucket: oss.Ptr(bucketName),
+		Key:    oss.Ptr(objectName),
+	})
+	if err != nil {
+		return "", err
+	}
+	defer result.Body.Close()
+
+	body, err := io.ReadAll(result.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }
 
 func safeString(fields map[string]*tablestore.ColumnValue, key string) (string, bool) {

@@ -39,6 +39,7 @@ func main() {
 	mux.HandleFunc("/api/devices", handleDevicesQuery)
 	mux.HandleFunc("/api/env", handleEnvQuery)
 	mux.HandleFunc("/api/colony", handleColonyQuery)
+	mux.HandleFunc("/api/colony/record", handleColonyRecord)
 	mux.HandleFunc("/api/colony/analyze", handleColonyAnalyze)
 	mux.HandleFunc("/api/colony/correction", handleColonyCorrection)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -190,10 +191,36 @@ func handleColonyQuery(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	result := web.GetColony(uuid, plateid, start, end)
-	if strings.Contains(result, `"success":false`) {
+	var meta struct {
+		Success bool `json:"success"`
+	}
+	if err := json.Unmarshal([]byte(result), &meta); err == nil && !meta.Success {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.Write([]byte(result))
+}
+
+func handleColonyRecord(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	key := r.URL.Query().Get("key")
+	if key == "" || strings.HasPrefix(key, "/") || strings.Contains(key, "..") || !strings.HasSuffix(strings.ToLower(key), ".txt") {
+		http.Error(w, "invalid record key", http.StatusBadRequest)
+		return
+	}
+
+	text, err := web.GetRecordText(key)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Fetch colony record failed: %v", err))
+		http.Error(w, "failed to fetch record", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write([]byte(text))
 }
 
 func handleColonyAnalyze(w http.ResponseWriter, r *http.Request) {
